@@ -1,0 +1,356 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Toolbar from './components/Toolbar';
+import CanvasStage from './components/CanvasStage';
+import { dft } from './utils/fourier';
+import { resamplePath, getBarycenter, generateSpline } from './utils/math';
+import './App.css';
+
+function App() {
+  const [mode, setMode] = useState('draw-pencil'); 
+  const [bgImage, setBgImage] = useState(null);
+  
+  // History State for Undo/Redo
+  const [pointsHistory, setPointsHistory] = useState([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  
+  const points = pointsHistory[historyIndex]; 
+
+  const [origin, setOrigin] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const [fourier, setFourier] = useState([]);
+  const [time, setTime] = useState(0);
+  const [path, setPath] = useState([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [manualOrigin, setManualOrigin] = useState(false);
+  
+  // Customization
+  const [animationSpeed, setAnimationSpeed] = useState(1);
+  const [epicycleColor, setEpicycleColor] = useState('#3b82f6');
+  const [pathColor, setPathColor] = useState('#3b82f6');
+  
+  const animationSpeedRef = useRef(animationSpeed);
+  useEffect(() => {
+    animationSpeedRef.current = animationSpeed;
+  }, [animationSpeed]);
+  
+  // Video Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const stageRef = useRef(null);
+  const animationRef = useRef(null);
+  const isRecordingRef = useRef(isRecording);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  // Layout sizing
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Update Barycenter when points change 
+  useEffect(() => {
+    if (points.length > 0 && !manualOrigin) {
+      setOrigin(getBarycenter(points));
+    }
+  }, [points, manualOrigin]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      setPath([]);
+      setFourier([]);
+      setIsAnimating(false);
+    }
+  }, [historyIndex]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < pointsHistory.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      setPath([]);
+      setFourier([]);
+      setIsAnimating(false);
+    }
+  }, [historyIndex, pointsHistory.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  const commitPoints = (newPoints) => {
+    const newHistory = pointsHistory.slice(0, historyIndex + 1);
+    newHistory.push(newPoints);
+    setPointsHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setPath([]);
+    setFourier([]);
+    setIsAnimating(false);
+  };
+
+  useEffect(() => {
+    if (isAnimating) {
+      if (points.length > 0) {
+        let pathForDFT = points;
+        if (mode === 'draw-curve') {
+          pathForDFT = generateSpline(points, 20, false);
+        }
+
+        const spacing = 2; 
+        const resampledPoints = resamplePath(pathForDFT, spacing);
+        
+        const complexPoints = resampledPoints.map(p => ({
+          re: p.x - origin.x,
+          im: p.y - origin.y
+        }));
+        
+        const fourierData = dft(complexPoints);
+        setFourier(fourierData);
+        setPath([]);
+        setTime(0);
+      } else {
+        setIsAnimating(false);
+        alert("¡Por favor dibuja una ruta primero!");
+      }
+    }
+  }, [isAnimating]);
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
+  useEffect(() => {
+    if (isAnimating && fourier.length > 0) {
+      // Force start from 0 to fix restart bug when time state hasn't flushed yet
+      let currentTime = 0; 
+      
+      const animate = () => {
+        const dt = (2 * Math.PI) / fourier.length;
+        // Total time increment for this frame
+        let frameDelta = dt * animationSpeedRef.current;
+        
+        // If speed is very high, processing it in one go makes jagged lines.
+        // We divide the frame into smaller substeps to preserve path resolution.
+        const substeps = Math.ceil(frameDelta / (dt * 0.5));
+        const subDelta = frameDelta / substeps;
+        
+        let newPathPoints = [];
+        let newTime = currentTime;
+
+        for (let step = 0; step < substeps; step++) {
+          newTime += subDelta;
+          
+          let x = origin.x;
+          let y = origin.y;
+          for (let i = 0; i < fourier.length; i++) {
+            let freq = fourier[i].freq;
+            let radius = fourier[i].amp;
+            let phase = fourier[i].phase;
+            x += radius * Math.cos(freq * newTime + phase);
+            y += radius * Math.sin(freq * newTime + phase);
+          }
+          newPathPoints.push({ x, y });
+          
+          // Stop exactly at 1 full cycle
+          if (newTime >= Math.PI * 2) {
+            newTime = Math.PI * 2;
+            break;
+          }
+        }
+        
+        currentTime = newTime;
+        setTime(currentTime);
+        
+        setPath(prevPath => {
+          let updated = [...prevPath, ...newPathPoints];
+          // We don't slice because it should exactly finish drawing the shape and stop
+          return updated;
+        });
+
+        // Auto-stop logic
+        if (currentTime >= Math.PI * 2) {
+          setIsAnimating(false);
+          if (isRecordingRef.current) {
+            stopRecording();
+          }
+          return; // Stop animation loop
+        }
+
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      
+      animationRef.current = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(animationRef.current);
+    }
+  }, [isAnimating, fourier, origin]);
+
+  const handleClear = () => {
+    commitPoints([]);
+    setManualOrigin(false);
+  };
+
+  const handleToggleAnimation = () => {
+    setIsAnimating(!isAnimating);
+  };
+
+  const handleRecordToggle = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      setRecordingUrl(null);
+      chunksRef.current = [];
+      const canvas = stageRef.current.content.querySelector('canvas');
+      
+      if (!canvas) {
+        alert("No se encontró el lienzo para grabar.");
+        return;
+      }
+      
+      const stream = canvas.captureStream(60);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        setRecordingUrl(url);
+      };
+
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+      
+      // Auto-restart animation when recording starts
+      if (points.length > 0) {
+        setPath([]);
+        setTime(0);
+        setIsAnimating(true);
+      }
+    }
+  };
+
+  const handleSavePoints = () => {
+    if (points.length === 0) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(points));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", "epiciclos_puntos.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
+  const handleLoadPoints = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const loadedPoints = JSON.parse(e.target.result);
+          if (Array.isArray(loadedPoints)) {
+            commitPoints(loadedPoints);
+          }
+        } catch (err) {
+          alert("Error al leer el archivo JSON.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  return (
+    <div className="app-container">
+      <div className="canvas-area">
+        <CanvasStage
+          width={windowSize.width}
+          height={windowSize.height}
+          mode={mode}
+          bgImage={bgImage}
+          points={points}
+          commitPoints={commitPoints}
+          origin={origin}
+          setOrigin={(newOrigin) => {
+            setOrigin(newOrigin);
+            setManualOrigin(true);
+          }}
+          fourier={fourier}
+          time={time}
+          path={path}
+          stageRef={stageRef}
+          isRecording={isRecording}
+          epicycleColor={epicycleColor}
+          pathColor={pathColor}
+        />
+        
+        {!isRecording && (
+          <div className="status-bar glass-panel">
+            {mode === 'draw-pencil' && 'Lápiz - Mantén presionado y arrastra para dibujar libremente'}
+            {mode === 'draw-line' && 'Línea - Haz clics para crear puntos (se unen con rectas). Haz clic cerca de uno para unirlo.'}
+            {mode === 'draw-curve' && 'Curva - Haz clics para crear puntos (se unen suavemente). Haz clic cerca de uno para unirlo.'}
+            {mode === 'edit' && 'Modo Edición - Arrastra los puntos para modificarlos'}
+            {mode === 'moveOrigin' && 'Mover Centro - Arrastra el punto verde para cambiar el centro'}
+            {mode === 'pan' && 'Mover Lienzo - Arrastra el fondo para moverte. Usa la rueda del ratón para hacer Zoom.'}
+          </div>
+        )}
+      </div>
+
+      <Toolbar 
+        mode={mode}
+        setMode={setMode}
+        onImageUpload={setBgImage}
+        onClear={handleClear}
+        onToggleAnimation={handleToggleAnimation}
+        isAnimating={isAnimating}
+        animationSpeed={animationSpeed}
+        setAnimationSpeed={setAnimationSpeed}
+        epicycleColor={epicycleColor}
+        setEpicycleColor={setEpicycleColor}
+        pathColor={pathColor}
+        setPathColor={setPathColor}
+        onRecord={handleRecordToggle}
+        isRecording={isRecording}
+        recordingUrl={recordingUrl}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={historyIndex > 0}
+        canRedo={historyIndex < pointsHistory.length - 1}
+        onSavePoints={handleSavePoints}
+        onLoadPoints={handleLoadPoints}
+      />
+    </div>
+  );
+}
+
+export default App;
