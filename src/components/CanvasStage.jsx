@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Stage, Layer, Image, Line, Circle } from 'react-konva';
 import useImage from 'use-image';
 import { generateSpline } from '../utils/math';
@@ -18,7 +18,11 @@ export default function CanvasStage({
   stageRef,
   isRecording,
   epicycleColor,
-  pathColor
+  pathColor,
+  epicycleThickness = 1,
+  pathThickness = 3,
+  pointSize = 3,
+  snapRadius = 15
 }) {
   const [image] = useImage(bgImage);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -31,6 +35,25 @@ export default function CanvasStage({
   
   const displayPoints = localPoints || points;
 
+  // Arrow Keys Panning
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Allow panning when no input fields are focused
+      if (document.activeElement.tagName === 'INPUT') return;
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const step = 30; // pixels to pan
+        if (e.key === 'ArrowUp') setStageY(prev => prev + step);
+        if (e.key === 'ArrowDown') setStageY(prev => prev - step);
+        if (e.key === 'ArrowLeft') setStageX(prev => prev + step);
+        if (e.key === 'ArrowRight') setStageX(prev => prev - step);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const getRelativePointerPosition = (stage) => {
     const pointerPosition = stage.getPointerPosition();
     const stageAttrs = stage.attrs;
@@ -41,7 +64,7 @@ export default function CanvasStage({
 
   const getSnappedPoint = (pos) => {
     for (let p of points) {
-      if (Math.hypot(p.x - pos.x, p.y - pos.y) < 15) {
+      if (Math.hypot(p.x - pos.x, p.y - pos.y) < snapRadius) {
         return { x: p.x, y: p.y };
       }
     }
@@ -64,11 +87,14 @@ export default function CanvasStage({
     if (mode === 'draw-pencil') {
       setIsDrawing(true);
       setLocalPoints([...points, { x: rawPos.x, y: rawPos.y }]);
-    } else if (mode === 'draw-line') {
+    } else if (mode === 'draw-line' || mode === 'draw-curve') {
       const pos = getSnappedPoint(rawPos);
-      commitPoints([...points, pos]);
-    } else if (mode === 'draw-curve') {
-      const pos = getSnappedPoint(rawPos);
+      if (points.length > 0) {
+        const lastPoint = points[points.length - 1];
+        if (Math.hypot(lastPoint.x - pos.x, lastPoint.y - pos.y) < 1) {
+          return; // Avoid adding a consecutive duplicate point
+        }
+      }
       commitPoints([...points, pos]);
     }
   };
@@ -122,6 +148,13 @@ export default function CanvasStage({
     setStageY(pointer.y - mousePointTo.y * newScale);
   };
 
+  const handleStageDragEnd = (e) => {
+    if (e.target === stageRef.current) {
+      setStageX(e.target.x());
+      setStageY(e.target.y());
+    }
+  };
+
   const handleDragOrigin = (e) => {
     if (mode === 'moveOrigin') {
       setOrigin({
@@ -167,8 +200,8 @@ export default function CanvasStage({
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
 
-  const epicycleStroke = epicycleColor ? hexToRgba(epicycleColor, 0.2) : "rgba(255, 255, 255, 0.2)";
-  const epicycleLineStroke = epicycleColor ? hexToRgba(epicycleColor, 0.5) : "rgba(255, 255, 255, 0.5)";
+  const epicycleStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
+  const epicycleLineStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
 
   const renderPoints = useMemo(() => {
     if (mode === 'draw-curve') {
@@ -202,13 +235,13 @@ export default function CanvasStage({
             y={prevY}
             radius={radius}
             stroke={epicycleStroke}
-            strokeWidth={1}
+            strokeWidth={epicycleThickness}
             listening={false}
           />
           <Line
             points={[prevX, prevY, x, y]}
             stroke={epicycleLineStroke}
-            strokeWidth={1}
+            strokeWidth={epicycleThickness}
             listening={false}
           />
         </React.Fragment>
@@ -220,7 +253,7 @@ export default function CanvasStage({
         key="tip"
         x={x}
         y={y}
-        radius={3}
+        radius={Math.max(pointSize, epicycleThickness * 1.5)}
         fill={pathColor || "#3b82f6"}
         listening={false}
       />
@@ -237,6 +270,7 @@ export default function CanvasStage({
       y={stageY}
       onWheel={handleWheel}
       draggable={mode === 'pan'}
+      onDragEnd={handleStageDragEnd}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -266,44 +300,55 @@ export default function CanvasStage({
           />
         )}
 
-        {/* Edit Points (Control Points) */}
+        {/* Edit Points (Control Points) and Snapping Zones */}
         {!isRecording && (mode === 'edit' || mode.startsWith('draw')) && displayPoints.map((p, i) => (
-          <Circle
-            key={i}
-            x={p.x}
-            y={p.y}
-            radius={draggedPointIndex === i ? 8 : (mode === 'edit' ? 6 : 3)}
-            fill={draggedPointIndex === i ? "#fff" : "#f59e0b"}
-            shadowColor={draggedPointIndex === i ? "#f59e0b" : "transparent"}
-            shadowBlur={draggedPointIndex === i ? 10 : 0}
-            draggable={mode === 'edit'}
-            onDragStart={(e) => handlePointDragStart(e, i)}
-            onDragMove={(e) => handlePointDragMove(e, i)}
-            onDragEnd={handlePointDragEnd}
-            onMouseEnter={(e) => {
-              if (mode === 'edit') e.target.getStage().container().style.cursor = 'grab';
-              if (mode.startsWith('draw') && mode !== 'draw-pencil') {
-                e.target.fill('#10b981');
-                e.target.radius(6);
-                e.target.draw();
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.target.getStage().container().style.cursor = 'default';
-              if (mode.startsWith('draw') && mode !== 'draw-pencil') {
-                e.target.fill('#f59e0b');
-                e.target.radius(3);
-                e.target.draw();
-              }
-            }}
-          />
+          <React.Fragment key={i}>
+            {(mode === 'draw-line' || mode === 'draw-curve') && (
+              <Circle
+                x={p.x}
+                y={p.y}
+                radius={snapRadius}
+                stroke="rgba(16, 185, 129, 0.4)"
+                strokeWidth={1}
+                listening={false}
+              />
+            )}
+            <Circle
+              x={p.x}
+              y={p.y}
+              radius={draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)}
+              fill={draggedPointIndex === i ? "#fff" : "#f59e0b"}
+              shadowColor={draggedPointIndex === i ? "#f59e0b" : "transparent"}
+              shadowBlur={draggedPointIndex === i ? 10 : 0}
+              draggable={mode === 'edit'}
+              onDragStart={(e) => handlePointDragStart(e, i)}
+              onDragMove={(e) => handlePointDragMove(e, i)}
+              onDragEnd={handlePointDragEnd}
+              onMouseEnter={(e) => {
+                if (mode === 'edit') e.target.getStage().container().style.cursor = 'grab';
+                if (mode.startsWith('draw') && mode !== 'draw-pencil') {
+                  e.target.fill('#10b981');
+                  e.target.radius(pointSize + 3);
+                  e.target.draw();
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.target.getStage().container().style.cursor = 'default';
+                if (mode.startsWith('draw') && mode !== 'draw-pencil') {
+                  e.target.fill('#f59e0b');
+                  e.target.radius(pointSize);
+                  e.target.draw();
+                }
+              }}
+            />
+          </React.Fragment>
         ))}
 
         {/* Epicycle traced path */}
         <Line
           points={epicyclePath}
           stroke={pathColor || "#3b82f6"}
-          strokeWidth={3}
+          strokeWidth={pathThickness}
           lineCap="round"
           lineJoin="round"
         />
@@ -316,7 +361,7 @@ export default function CanvasStage({
           <Circle
             x={origin.x}
             y={origin.y}
-            radius={8}
+            radius={pointSize + 5}
             fill={mode === 'moveOrigin' ? "#10b981" : "#475569"}
             draggable={mode === 'moveOrigin'}
             onDragMove={handleDragOrigin}

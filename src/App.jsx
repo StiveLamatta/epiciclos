@@ -26,6 +26,11 @@ function App() {
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [epicycleColor, setEpicycleColor] = useState('#3b82f6');
   const [pathColor, setPathColor] = useState('#3b82f6');
+  const [epicycleThickness, setEpicycleThickness] = useState(1);
+  const [pathThickness, setPathThickness] = useState(3);
+  const [pointSize, setPointSize] = useState(3);
+  const [pathScale, setPathScale] = useState(1);
+  const [snapRadius, setSnapRadius] = useState(15);
   
   const animationSpeedRef = useRef(animationSpeed);
   useEffect(() => {
@@ -35,6 +40,7 @@ function App() {
   // Video Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState(null);
+  const [recordingMp4Url, setRecordingMp4Url] = useState(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
@@ -90,6 +96,7 @@ function App() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Don't override arrow keys if they are for panning (handled in CanvasStage)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         handleUndo();
@@ -124,8 +131,8 @@ function App() {
         const resampledPoints = resamplePath(pathForDFT, spacing);
         
         const complexPoints = resampledPoints.map(p => ({
-          re: p.x - origin.x,
-          im: p.y - origin.y
+          re: (p.x - origin.x) * pathScale,
+          im: (p.y - origin.y) * pathScale
         }));
         
         const fourierData = dft(complexPoints);
@@ -137,7 +144,7 @@ function App() {
         alert("¡Por favor dibuja una ruta primero!");
       }
     }
-  }, [isAnimating]);
+  }, [isAnimating, points, origin, pathScale, mode]);
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -225,6 +232,7 @@ function App() {
       stopRecording();
     } else {
       setRecordingUrl(null);
+      setRecordingMp4Url(null);
       chunksRef.current = [];
       const canvas = stageRef.current.content.querySelector('canvas');
       
@@ -234,7 +242,14 @@ function App() {
       }
       
       const stream = canvas.captureStream(60);
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      
+      // Determine best available codec (some browsers support h264 for webm which converts better to mp4)
+      let options = { mimeType: 'video/webm' };
+      if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+        options = { mimeType: 'video/webm;codecs=h264' };
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -243,9 +258,13 @@ function App() {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        setRecordingUrl(url);
+        // WebM
+        const blobWebM = new Blob(chunksRef.current, { type: 'video/webm' });
+        setRecordingUrl(URL.createObjectURL(blobWebM));
+        
+        // MP4 (Container trick: works in many modern players when codec is h264 or generic)
+        const blobMP4 = new Blob(chunksRef.current, { type: 'video/mp4' });
+        setRecordingMp4Url(URL.createObjectURL(blobMP4));
       };
 
       mediaRecorder.start();
@@ -312,6 +331,10 @@ function App() {
           isRecording={isRecording}
           epicycleColor={epicycleColor}
           pathColor={pathColor}
+          epicycleThickness={epicycleThickness}
+          pathThickness={pathThickness}
+          pointSize={pointSize}
+          snapRadius={snapRadius}
         />
         
         {!isRecording && (
@@ -321,7 +344,7 @@ function App() {
             {mode === 'draw-curve' && 'Curva - Haz clics para crear puntos (se unen suavemente). Haz clic cerca de uno para unirlo.'}
             {mode === 'edit' && 'Modo Edición - Arrastra los puntos para modificarlos'}
             {mode === 'moveOrigin' && 'Mover Centro - Arrastra el punto verde para cambiar el centro'}
-            {mode === 'pan' && 'Mover Lienzo - Arrastra el fondo para moverte. Usa la rueda del ratón para hacer Zoom.'}
+            {mode === 'pan' && 'Mover Lienzo - Arrastra el fondo o usa las Flechas para moverte. Rueda del ratón para Zoom.'}
           </div>
         )}
       </div>
@@ -339,9 +362,20 @@ function App() {
         setEpicycleColor={setEpicycleColor}
         pathColor={pathColor}
         setPathColor={setPathColor}
+        epicycleThickness={epicycleThickness}
+        setEpicycleThickness={setEpicycleThickness}
+        pathThickness={pathThickness}
+        setPathThickness={setPathThickness}
+        pathScale={pathScale}
+        setPathScale={setPathScale}
+        snapRadius={snapRadius}
+        setSnapRadius={setSnapRadius}
+        pointSize={pointSize}
+        setPointSize={setPointSize}
         onRecord={handleRecordToggle}
         isRecording={isRecording}
         recordingUrl={recordingUrl}
+        recordingMp4Url={recordingMp4Url}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
