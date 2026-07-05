@@ -285,6 +285,9 @@ export default function Toolbar({
           )}
         </div>
       </div>
+      {/* End toolbar-sections */}
+      </div>
+      {/* End toolbar-container */}
       
       {pendingDownload && (
         <AdInterstitialModal 
