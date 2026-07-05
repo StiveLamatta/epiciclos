@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Upload, Play, Square, Trash2, Video, PenTool, Move, Download, Undo2, Redo2, Save, MousePointer2, Minus, Snail, Palette, Pencil, Spline, Crosshair, FolderOpen, User
+  Upload, Play, Square, Trash2, Video, PenTool, Move, Download, Undo2, Redo2, Save, MousePointer2, Minus, Snail, Palette, Pencil, Spline, Crosshair, FolderOpen, User, Menu, X
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -16,6 +16,7 @@ export default function Toolbar({
   onSavePoints, onLoadPoints, onLoadProject
 }) {
   const [pendingDownload, setPendingDownload] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -52,7 +53,7 @@ export default function Toolbar({
 
   if (isRecording) {
     return (
-      <div className="recording-indicator glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', right: '20px', width: '320px' }}>
+      <div className="recording-indicator glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', right: '20px', width: '320px', zIndex: 30 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span className="dot"></span>
           <span style={{ fontSize: '0.9rem' }}>Grabando... Se detendrá automáticamente al terminar el ciclo.</span>
@@ -65,9 +66,34 @@ export default function Toolbar({
   }
 
   return (
-    <div className="toolbar-container glass-panel">
-      <div className="toolbar-header">
-        <h1><PenTool size={24} /> Epiciclos</h1>
+    <>
+      {/* Mobile Quick Bar */}
+      <div className="mobile-quickbar glass-panel">
+        <button className="btn icon-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+        <div className="quickbar-scroll">
+            <button className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} onClick={() => {setMode('draw-pencil'); setIsMobileMenuOpen(false);}} title="Lápiz (Libre)">
+              <Pencil size={18} />
+            </button>
+            <button className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} onClick={() => {setMode('draw-line'); setIsMobileMenuOpen(false);}} title="Líneas Rectas">
+              <Minus size={18} />
+            </button>
+            <button className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} onClick={() => {setMode('draw-curve'); setIsMobileMenuOpen(false);}} title="Curva Suave">
+              <Spline size={18} />
+            </button>
+            <button className={`btn icon-btn ${mode === 'pan' ? 'active' : ''}`} onClick={() => {setMode('pan'); setIsMobileMenuOpen(false);}} title="Mover Lienzo">
+              <Move size={18} />
+            </button>
+            <button className={`btn icon-btn ${isAnimating ? 'danger' : 'primary'}`} onClick={() => {onToggleAnimation(); setIsMobileMenuOpen(false);}}>
+               {isAnimating ? <Square size={18} /> : <Play size={18} />}
+            </button>
+        </div>
+      </div>
+
+      <div className={`toolbar-container glass-panel ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <div className="toolbar-header">
+          <h1><PenTool size={24} /> Epiciclos</h1>
         
         {!session ? (
           <button onClick={onLoginClick} className="btn primary w-full" style={{ marginBottom: '15px' }}>
@@ -265,6 +291,6 @@ export default function Toolbar({
           onSkip={executeDownload} 
         />
       )}
-    </div>
+    </>
   );
 }

@@ -28,6 +28,7 @@ export default function CanvasStage({
   const [isDrawing, setIsDrawing] = useState(false);
   
   const [localPoints, setLocalPoints] = useState(null);
+  const lastDistRef = useRef(0);
   
   const [stageScale, setStageScale] = useState(1);
   const [stageX, setStageX] = useState(0);
@@ -277,13 +278,63 @@ export default function CanvasStage({
       onMouseLeave={handleMouseUp}
       onTouchStart={(e) => {
         e.evt.preventDefault();
-        handleMouseDown(e);
+        if (e.evt.touches.length === 2) {
+          const touch1 = e.evt.touches[0];
+          const touch2 = e.evt.touches[1];
+          const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+          lastDistRef.current = dist;
+        } else {
+          handleMouseDown(e);
+        }
       }}
       onTouchMove={(e) => {
         e.evt.preventDefault();
-        handleMouseMove(e);
+        if (e.evt.touches.length === 2) {
+          const touch1 = e.evt.touches[0];
+          const touch2 = e.evt.touches[1];
+          const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+          
+          if (!lastDistRef.current) {
+            lastDistRef.current = dist;
+            return;
+          }
+
+          const scaleBy = dist / lastDistRef.current;
+          const stage = stageRef.current;
+          const oldScale = stageScale;
+          
+          let newScale = oldScale * scaleBy;
+          if (newScale < 0.1) newScale = 0.1;
+
+          // Find the center of the pinch
+          const clientX = (touch1.clientX + touch2.clientX) / 2;
+          const clientY = (touch1.clientY + touch2.clientY) / 2;
+          
+          // Get the pointer position relative to the stage container
+          const rect = stage.container().getBoundingClientRect();
+          const pointer = {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+          };
+
+          const mousePointTo = {
+            x: (pointer.x - stageX) / oldScale,
+            y: (pointer.y - stageY) / oldScale,
+          };
+
+          setStageScale(newScale);
+          setStageX(pointer.x - mousePointTo.x * newScale);
+          setStageY(pointer.y - mousePointTo.y * newScale);
+          
+          lastDistRef.current = dist;
+        } else {
+          handleMouseMove(e);
+        }
       }}
-      onTouchEnd={handleMouseUp}
+      onTouchEnd={(e) => {
+        lastDistRef.current = 0;
+        handleMouseUp(e);
+      }}
       ref={stageRef}
       className="canvas-wrapper"
     >

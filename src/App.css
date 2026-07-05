@@ -367,12 +367,45 @@ input[type="color"]::-webkit-color-swatch {
 .danger-text { color: #ef4444 !important; }
 .danger-text:hover { background: rgba(239, 68, 68, 0.2) !important; }
 
+.mobile-quickbar {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  .mobile-quickbar {
+    display: flex;
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    right: 15px;
+    z-index: 20;
+    padding: 10px;
+    align-items: center;
+    gap: 10px;
+  }
+  .quickbar-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 5px;
+  }
+  .quickbar-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+  .quickbar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+  }
   .toolbar-container {
-    width: calc(100% - 20px);
-    right: 10px;
-    top: 10px;
-    max-height: 50vh;
+    display: none;
+    top: 85px;
+    right: 15px;
+    width: calc(100% - 30px);
+    max-height: calc(100vh - 100px);
     padding: 15px;
+  }
+  .toolbar-container.mobile-open {
+    display: flex;
   }
 }
