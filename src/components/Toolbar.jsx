@@ -52,8 +52,14 @@ export default function Toolbar({
 
   if (isRecording) {
     return (
-      <div className="recording-indicator glass-panel">
-        <span className="dot"></span> Grabando... La animación se detendrá y guardará sola.
+      <div className="recording-indicator glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '15px', right: '20px', width: '320px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span className="dot"></span>
+          <span style={{ fontSize: '0.9rem' }}>Grabando... Se detendrá automáticamente al terminar el ciclo.</span>
+        </div>
+        <button className="btn danger w-full" onClick={onRecord}>
+          <Square size={16} /> Detener ahora
+        </button>
       </div>
     );
   }
