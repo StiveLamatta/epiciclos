@@ -3,9 +3,41 @@ import Toolbar from './components/Toolbar';
 import CanvasStage from './components/CanvasStage';
 import { dft } from './utils/fourier';
 import { resamplePath, getBarycenter, generateSpline } from './utils/math';
+import { supabase } from './lib/supabase';
+import AuthModal from './components/AuthModal';
+import Dashboard from './components/Dashboard';
+import AdBanner from './components/AdBanner';
 import './App.css';
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [mode, setMode] = useState('draw-pencil'); 
   const [bgImage, setBgImage] = useState(null);
   
@@ -310,8 +342,11 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ position: 'relative' }}>
       <div className="canvas-area">
+        <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 5 }}>
+          <AdBanner type="top" />
+        </div>
         <CanvasStage
           width={windowSize.width}
           height={windowSize.height}
@@ -350,7 +385,20 @@ function App() {
       </div>
 
       <Toolbar 
-        mode={mode}
+      session={session}
+      onLoginClick={() => setShowAuth(true)}
+      onLogout={() => supabase.auth.signOut()}
+      currentPoints={points}
+      onLoadProject={(pts) => { 
+        setPath([]); 
+        setFourier([]); 
+        setIsAnimating(false);
+        const newHistory = pointsHistory.slice(0, historyIndex + 1);
+        newHistory.push(pts);
+        setPointsHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+      }}
+      mode={mode}
         setMode={setMode}
         onImageUpload={setBgImage}
         onClear={handleClear}
@@ -383,6 +431,22 @@ function App() {
         onSavePoints={handleSavePoints}
         onLoadPoints={handleLoadPoints}
       />
+      
+      {showAuth && (
+        <AuthModal 
+          onClose={() => setShowAuth(false)} 
+          onAuthSuccess={() => setShowAuth(false)} 
+        />
+      )}
+
+      {isOffline && (
+        <div className="modal-overlay">
+          <div className="auth-modal glass-panel" style={{ textAlign: 'center' }}>
+            <h2 className="danger-text">Sin Conexión</h2>
+            <p>Se requiere una conexión a internet para continuar utilizando las funciones de Epiciclos.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

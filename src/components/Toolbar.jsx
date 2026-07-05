@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  Upload, Play, Square, Trash2, Video, PenTool, Move, Download, Undo2, Redo2, Save, MousePointer2, Minus, Snail, Palette, Pencil, Spline, Crosshair, FolderOpen
+  Upload, Play, Square, Trash2, Video, PenTool, Move, Download, Undo2, Redo2, Save, MousePointer2, Minus, Snail, Palette, Pencil, Spline, Crosshair, FolderOpen, User
 } from 'lucide-react';
+import Dashboard from './Dashboard';
+import AdInterstitialModal from './AdInterstitialModal';
 
 export default function Toolbar({
+  session, onLoginClick, onLogout, currentPoints,
   mode, setMode, onImageUpload, onClear, onToggleAnimation, isAnimating,
   animationSpeed, setAnimationSpeed, epicycleColor, setEpicycleColor,
   pathColor, setPathColor, epicycleThickness, setEpicycleThickness,
@@ -12,6 +15,8 @@ export default function Toolbar({
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
   onSavePoints, onLoadPoints
 }) {
+  const [pendingDownload, setPendingDownload] = useState(null);
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -20,13 +25,24 @@ export default function Toolbar({
     }
   };
 
-  const handleDownload = (url, extension) => {
+  const handleDownloadClick = (url, extension) => {
+    // Si no hay red, bloqueamos incluso intentar descargar
+    if (!navigator.onLine) {
+      alert("Error: No tienes conexión a internet para continuar.");
+      return;
+    }
+    setPendingDownload({ url, extension });
+  };
+
+  const executeDownload = () => {
+    if (!pendingDownload) return;
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `animacion-epciclos.${extension}`;
+    a.href = pendingDownload.url;
+    a.download = `animacion-epiciclos.${pendingDownload.extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    setPendingDownload(null);
   };
 
   if (isRecording) {
@@ -41,6 +57,20 @@ export default function Toolbar({
     <div className="toolbar-container glass-panel">
       <div className="toolbar-header">
         <h1><PenTool size={24} /> Epiciclos</h1>
+        
+        {!session ? (
+          <button onClick={onLoginClick} className="btn primary w-full" style={{ marginBottom: '15px' }}>
+            <User size={16} /> Iniciar Sesión para Guardar
+          </button>
+        ) : (
+          <Dashboard 
+            session={session} 
+            onLogout={onLogout} 
+            currentPoints={currentPoints}
+            onSaveProject={(pts) => onSavePoints(pts)} // Using prop from earlier or can save directly
+            onLoadProject={onLoadPoints}
+          />
+        )}
       </div>
 
       <div className="toolbar-sections">
@@ -204,20 +234,26 @@ export default function Toolbar({
           
           {(recordingUrl || recordingMp4Url) && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-              {recordingUrl && (
-                <button className="btn primary w-full" onClick={() => handleDownload(recordingUrl, 'webm')}>
-                  <Download size={16} /> .WebM
+              {recordingMp4Url && (
+                <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary w-full">
+                  <Download size={16} /> Descargar .MP4
                 </button>
               )}
-              {recordingMp4Url && (
-                <button className="btn primary w-full" onClick={() => handleDownload(recordingMp4Url, 'mp4')}>
-                  <Download size={16} /> .MP4
+              {recordingUrl && (
+                <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn w-full">
+                  <Download size={16} /> Descargar .WebM
                 </button>
               )}
             </div>
           )}
         </div>
       </div>
+      
+      {pendingDownload && (
+        <AdInterstitialModal 
+          onSkip={executeDownload} 
+        />
+      )}
     </div>
   );
 }
