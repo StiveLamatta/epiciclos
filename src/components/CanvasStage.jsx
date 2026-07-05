@@ -275,6 +275,15 @@ export default function CanvasStage({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={(e) => {
+        e.evt.preventDefault();
+        handleMouseDown(e);
+      }}
+      onTouchMove={(e) => {
+        e.evt.preventDefault();
+        handleMouseMove(e);
+      }}
+      onTouchEnd={handleMouseUp}
       ref={stageRef}
       className="canvas-wrapper"
     >

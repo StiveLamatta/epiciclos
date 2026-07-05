@@ -366,3 +366,13 @@ input[type="color"]::-webkit-color-swatch {
 }
 .danger-text { color: #ef4444 !important; }
 .danger-text:hover { background: rgba(239, 68, 68, 0.2) !important; }
+
+@media (max-width: 768px) {
+  .toolbar-container {
+    width: calc(100% - 20px);
+    right: 10px;
+    top: 10px;
+    max-height: 50vh;
+    padding: 15px;
+  }
+}

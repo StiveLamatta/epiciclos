@@ -246,12 +246,12 @@ export default function Toolbar({
           {(recordingUrl || recordingMp4Url) && (
             <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
               {recordingMp4Url && (
-                <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary w-full" style={{ padding: '6px', fontSize: '0.75rem' }}>
+                <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary" style={{ flex: 1, padding: '6px', fontSize: '0.75rem' }}>
                   <Download size={14} /> .MP4
                 </button>
               )}
               {recordingUrl && (
-                <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn w-full" style={{ padding: '6px', fontSize: '0.75rem' }}>
+                <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn" style={{ flex: 1, padding: '6px', fontSize: '0.75rem' }}>
                   <Download size={14} /> .WebM
                 </button>
               )}
