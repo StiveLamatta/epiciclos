@@ -13,7 +13,7 @@ export default function Toolbar({
   pathThickness, setPathThickness, pathScale, setPathScale, pointSize, setPointSize,
   snapRadius, setSnapRadius,
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
-  onSavePoints, onLoadPoints
+  onSavePoints, onLoadPoints, onLoadProject
 }) {
   const [pendingDownload, setPendingDownload] = useState(null);
 
@@ -36,6 +36,11 @@ export default function Toolbar({
 
   const executeDownload = () => {
     if (!pendingDownload) return;
+    if (!navigator.onLine) {
+      alert("Error: Se perdió la conexión a internet. Reconéctate para descargar.");
+      setPendingDownload(null);
+      return;
+    }
     const a = document.createElement('a');
     a.href = pendingDownload.url;
     a.download = `animacion-epiciclos.${pendingDownload.extension}`;
@@ -68,7 +73,7 @@ export default function Toolbar({
             onLogout={onLogout} 
             currentPoints={currentPoints}
             onSaveProject={(pts) => onSavePoints(pts)} // Using prop from earlier or can save directly
-            onLoadProject={onLoadPoints}
+            onLoadProject={onLoadProject}
           />
         )}
       </div>
@@ -233,15 +238,15 @@ export default function Toolbar({
           </button>
           
           {(recordingUrl || recordingMp4Url) && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
               {recordingMp4Url && (
-                <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary w-full">
-                  <Download size={16} /> Descargar .MP4
+                <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary w-full" style={{ padding: '6px', fontSize: '0.75rem' }}>
+                  <Download size={14} /> .MP4
                 </button>
               )}
               {recordingUrl && (
-                <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn w-full">
-                  <Download size={16} /> Descargar .WebM
+                <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn w-full" style={{ padding: '6px', fontSize: '0.75rem' }}>
+                  <Download size={14} /> .WebM
                 </button>
               )}
             </div>
