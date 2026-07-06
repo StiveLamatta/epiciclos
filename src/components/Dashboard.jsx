@@ -147,7 +147,7 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
           <h4 style={{ margin: '0 0 10px 0', color: '#facc15' }}>🚀 Desbloquea Premium</h4>
           <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
           <a 
-            href={`https://buy.stripe.com/test_placeholder?client_reference_id=${session.user.id}`} 
+            href={`https://tu-tienda.lemonsqueezy.com/checkout/buy/tu-producto-id?checkout[custom][user_id]=${session.user.id}`} 
             target="_blank" 
             rel="noopener noreferrer" 
             className="btn w-full" 
