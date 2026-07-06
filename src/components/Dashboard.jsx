@@ -17,7 +17,7 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
       const res = await fetch('/api/create-mp-preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: session.user.id })
+        body: JSON.stringify({ userId: session.user.id, email: session.user.email })
       });
       const data = await res.json();
       

@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { userId } = req.body;
+  const { userId, email } = req.body;
 
   if (!userId) {
     return res.status(400).json({ error: 'Falta userId' });
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         }
       ],
       payer: {
-        // Opcional, podríamos pasar el correo del usuario si lo tuviéramos en req.body
+        email: email || undefined
       },
       external_reference: userId,
       back_urls: {
