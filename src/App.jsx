@@ -13,16 +13,37 @@ function App() {
   const [session, setSession] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isPremium, setIsPremium] = useState(false);
   
+  const checkPremium = async (currentSession) => {
+    if (!currentSession) {
+      setIsPremium(false);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('is_premium')
+      .eq('id', currentSession.user.id)
+      .single();
+      
+    if (data && data.is_premium) {
+      setIsPremium(true);
+    } else {
+      setIsPremium(false);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      checkPremium(session);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      checkPremium(session);
     });
 
     const handleOnline = () => setIsOffline(false);
@@ -344,9 +365,11 @@ function App() {
   return (
     <div className="app-container" style={{ position: 'relative' }}>
       <div className="canvas-area">
-        <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 5 }}>
-          <AdBanner type="top" />
-        </div>
+        {!isPremium && (
+          <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 5 }}>
+            <AdBanner type="top" />
+          </div>
+        )}
         <CanvasStage
           width={windowSize.width}
           height={windowSize.height}
@@ -385,6 +408,7 @@ function App() {
       </div>
 
       <Toolbar 
+      isPremium={isPremium}
       session={session}
       onLoginClick={() => setShowAuth(true)}
       onLogout={() => supabase.auth.signOut()}

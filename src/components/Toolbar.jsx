@@ -6,7 +6,7 @@ import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
 
 export default function Toolbar({
-  session, onLoginClick, onLogout, currentPoints,
+  isPremium, session, onLoginClick, onLogout, currentPoints,
   mode, setMode, onImageUpload, onClear, onToggleAnimation, isAnimating,
   animationSpeed, setAnimationSpeed, epicycleColor, setEpicycleColor,
   pathColor, setPathColor, epicycleThickness, setEpicycleThickness,
@@ -32,7 +32,17 @@ export default function Toolbar({
       alert("Error: No tienes conexión a internet para continuar.");
       return;
     }
-    setPendingDownload({ url, extension });
+    
+    if (isPremium) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `animacion-epiciclos.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      setPendingDownload({ url, extension });
+    }
   };
 
   const executeDownload = () => {
@@ -101,6 +111,7 @@ export default function Toolbar({
           </button>
         ) : (
           <Dashboard 
+            isPremium={isPremium}
             session={session} 
             onLogout={onLogout} 
             currentPoints={currentPoints}

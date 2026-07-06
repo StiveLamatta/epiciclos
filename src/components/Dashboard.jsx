@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Folder, LogOut, Trash2, Play, Cloud, AlertCircle } from 'lucide-react';
 
-export default function Dashboard({ session, onLogout, onLoadProject, onSaveProject, currentPoints }) {
+export default function Dashboard({ isPremium, session, onLogout, onLoadProject, onSaveProject, currentPoints }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,8 +37,8 @@ export default function Dashboard({ session, onLogout, onLoadProject, onSaveProj
     e.preventDefault();
     if (!projectName.trim() || currentPoints.length === 0) return;
     
-    if (projects.length >= 5) {
-      setError('Límite del plan gratuito alcanzado. Sólo puedes guardar 5 proyectos.');
+    if (!isPremium && projects.length >= 5) {
+      setError('Límite del plan gratuito alcanzado. Sólo puedes guardar 5 proyectos. ¡Mejora a Premium para almacenamiento ilimitado!');
       return;
     }
 
@@ -120,7 +120,7 @@ export default function Dashboard({ session, onLogout, onLoadProject, onSaveProj
       </div>
 
       <div className="dashboard-projects">
-        <h4>Tus Proyectos ({projects.length}/5)</h4>
+        <h4>Tus Proyectos ({projects.length}{isPremium ? '' : '/5'})</h4>
         {loading ? (
           <p className="text-muted text-center">Cargando proyectos...</p>
         ) : projects.length === 0 ? (
@@ -141,6 +141,22 @@ export default function Dashboard({ session, onLogout, onLoadProject, onSaveProj
           </ul>
         )}
       </div>
+
+      {!isPremium && (
+        <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '8px', textAlign: 'center' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#facc15' }}>🚀 Desbloquea Premium</h4>
+          <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
+          <a 
+            href={`https://buy.stripe.com/test_placeholder?client_reference_id=${session.user.id}`} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="btn w-full" 
+            style={{ background: '#facc15', color: '#000', fontWeight: 'bold' }}
+          >
+            Mejorar ahora
+          </a>
+        </div>
+      )}
     </div>
   );
 }
