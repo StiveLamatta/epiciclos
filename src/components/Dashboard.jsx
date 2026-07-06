@@ -146,15 +146,31 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
         <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '8px', textAlign: 'center' }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#facc15' }}>🚀 Desbloquea Premium</h4>
           <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
-          <a 
-            href={`https://stivesci.gumroad.com/l/tu_producto?user_id=${session.user.id}`} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="btn w-full" 
-            style={{ background: '#facc15', color: '#000', fontWeight: 'bold' }}
-          >
-            Mejorar ahora
-          </a>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <a 
+              href={`https://link.mercadopago.com.pe/tu_link_aqui?external_reference=${session.user.id}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="btn w-full" 
+              style={{ background: '#009ee3', color: '#fff', fontWeight: 'bold' }}
+            >
+              Pagar con Yape / Tarjeta (Perú)
+            </a>
+            
+            <a 
+              href={`https://paypal.me/tu_usuario/5usd`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="btn w-full" 
+              style={{ background: '#003087', color: '#fff', fontWeight: 'bold' }}
+            >
+              Pagar con PayPal (Internacional)
+            </a>
+          </div>
+          <small style={{ display: 'block', marginTop: '10px', fontSize: '0.7rem', color: '#9ca3af' }}>
+            Nota para ti: Si usas PayPal.me, deberás actualizarles el Premium manualmente en Supabase, o usar un Botón de Pago inteligente de PayPal para que sea automático. MercadoPago sí es 100% automático.
+          </small>
         </div>
       )}
     </div>
