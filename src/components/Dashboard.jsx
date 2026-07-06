@@ -8,6 +8,31 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
   const [saving, setSaving] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [error, setError] = useState(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const handleMercadoPagoClick = async (e) => {
+    e.preventDefault();
+    setIsRedirecting(true);
+    try {
+      const res = await fetch('/api/create-mp-preference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: session.user.id })
+      });
+      const data = await res.json();
+      
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      } else {
+        alert('Error al conectar con Mercado Pago. Intenta más tarde.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error en la conexión. Intenta más tarde.');
+    } finally {
+      setIsRedirecting(false);
+    }
+  };
 
   useEffect(() => {
     if (session) {
@@ -148,15 +173,14 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
           <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <a 
-              href={`https://link.mercadopago.com.pe/tu_link_aqui?external_reference=${session.user.id}`} 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <button 
+              onClick={handleMercadoPagoClick}
+              disabled={isRedirecting}
               className="btn w-full" 
               style={{ background: '#009ee3', color: '#fff', fontWeight: 'bold' }}
             >
-              Pagar con Yape / Tarjeta (Perú)
-            </a>
+              {isRedirecting ? 'Conectando...' : 'Pagar con Yape / Tarjeta (Perú)'}
+            </button>
             
             <a 
               href={`https://paypal.me/tu_usuario/5usd`} 
