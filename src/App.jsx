@@ -366,7 +366,7 @@ function App() {
     <div className="app-container" style={{ position: 'relative' }}>
       <div className="canvas-area">
         {!isPremium && (
-          <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 5 }}>
+          <div style={{ position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '100%', maxWidth: '728px', padding: '0 12px' }}>
             <AdBanner type="top" />
           </div>
         )}
@@ -396,13 +396,13 @@ function App() {
         />
         
         {!isRecording && (
-          <div className="status-bar glass-panel">
-            {mode === 'draw-pencil' && 'Lápiz - Mantén presionado y arrastra para dibujar libremente'}
-            {mode === 'draw-line' && 'Línea - Haz clics para crear puntos (se unen con rectas). Haz clic cerca de uno para unirlo.'}
-            {mode === 'draw-curve' && 'Curva - Haz clics para crear puntos (se unen suavemente). Haz clic cerca de uno para unirlo.'}
-            {mode === 'edit' && 'Modo Edición - Arrastra los puntos para modificarlos'}
-            {mode === 'moveOrigin' && 'Mover Centro - Arrastra el punto verde para cambiar el centro'}
-            {mode === 'pan' && 'Mover Lienzo - Arrastra el fondo o usa las Flechas para moverte. Rueda del ratón para Zoom.'}
+          <div className="status-bar">
+            {mode === 'draw-pencil' && 'Lápiz — Arrastra para dibujar'}
+            {mode === 'draw-line' && 'Línea — Clic para crear puntos'}
+            {mode === 'draw-curve' && 'Curva — Clic para crear puntos suaves'}
+            {mode === 'edit' && 'Edición — Arrastra los puntos'}
+            {mode === 'moveOrigin' && 'Arrastra el punto verde (centro)'}
+            {mode === 'pan' && 'Arrastra para mover • Scroll para zoom'}
           </div>
         )}
       </div>
