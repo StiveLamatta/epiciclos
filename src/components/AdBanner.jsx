@@ -1,6 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { isNative } from '../services/platform';
+import { showNativeBanner, hideNativeBanner } from '../services/admob';
 
 export default function AdBanner({ type = 'top' }) {
+  useEffect(() => {
+    if (isNative()) {
+      showNativeBanner();
+      return () => {
+        hideNativeBanner();
+      };
+    }
+  }, []);
+
+  // Si corre en Android nativo, AdMob superpone el banner del sistema
+  if (isNative()) {
+    return null;
+  }
+
   return (
     <div className="ad-banner-container">
       <div 
@@ -20,14 +36,6 @@ export default function AdBanner({ type = 'top' }) {
           borderRadius: '8px',
         }}
       >
-        {/* 
-          <ins className="adsbygoogle"
-               style={{ display: 'block' }}
-               data-ad-client="ca-pub-XXXXXXXXXXXXX"
-               data-ad-slot="YYYYYYYYYY"
-               data-ad-format="auto"
-               data-full-width-responsive="true"></ins>
-        */}
         <p>Espacio Publicitario</p>
       </div>
     </div>

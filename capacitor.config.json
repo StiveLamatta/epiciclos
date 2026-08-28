@@ -1,0 +1,14 @@
+{
+  "appId": "com.stivesci.epiciclos",
+  "appName": "Epiciclos",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "AdMob": {
+      "initializeOnTesting": true
+    }
+  }
+}

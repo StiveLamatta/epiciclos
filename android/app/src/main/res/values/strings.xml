@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Epiciclos</string>
+    <string name="title_activity_main">Epiciclos</string>
+    <string name="package_name">com.stivesci.epiciclos</string>
+    <string name="custom_url_scheme">com.stivesci.epiciclos</string>
+</resources>

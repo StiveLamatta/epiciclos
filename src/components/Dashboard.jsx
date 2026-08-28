@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Folder, LogOut, Trash2, Play, Cloud, AlertCircle } from 'lucide-react';
+import { Folder, LogOut, Trash2, Cloud, AlertCircle, ShoppingBag } from 'lucide-react';
+import { isNative } from '../services/platform';
 
 export default function Dashboard({ isPremium, session, onLogout, onLoadProject, onSaveProject, currentPoints }) {
   const [projects, setProjects] = useState([]);
@@ -32,6 +33,10 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
     } finally {
       setIsRedirecting(false);
     }
+  };
+
+  const handleGooglePlayPurchase = () => {
+    alert('Iniciando Google Play Billing... (Conecta tu cuenta de Google Play Console para compras reales en producción)');
   };
 
   useEffect(() => {
@@ -102,7 +107,7 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
         
       if (error) throw error;
       setProjects(projects.filter(p => p.id !== id));
-      setError(null); // Clear any limit errors since we freed space
+      setError(null);
     } catch (err) {
       console.error('Error deleting project:', err);
     }
@@ -172,29 +177,43 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
           <h4 style={{ margin: '0 0 10px 0', color: '#facc15' }}>🚀 Desbloquea Premium</h4>
           <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button 
-              onClick={handleMercadoPagoClick}
-              disabled={isRedirecting}
-              className="btn w-full" 
-              style={{ background: '#009ee3', color: '#fff', fontWeight: 'bold' }}
-            >
-              {isRedirecting ? 'Conectando...' : 'Pagar con Yape / Tarjeta (Perú)'}
-            </button>
-            
-            <a 
-              href={`https://paypal.me/tu_usuario/5usd`} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="btn w-full" 
-              style={{ background: '#003087', color: '#fff', fontWeight: 'bold' }}
-            >
-              Pagar con PayPal (Internacional)
-            </a>
-          </div>
-          <small style={{ display: 'block', marginTop: '10px', fontSize: '0.7rem', color: '#9ca3af' }}>
-            Nota para ti: Si usas PayPal.me, deberás actualizarles el Premium manualmente en Supabase, o usar un Botón de Pago inteligente de PayPal para que sea automático. MercadoPago sí es 100% automático.
-          </small>
+          {isNative() ? (
+            /* --- NATIVE ANDROID (GOOGLE PLAY BILLING) --- */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button 
+                onClick={handleGooglePlayPurchase}
+                className="btn w-full" 
+                style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontWeight: 'bold' }}
+              >
+                <ShoppingBag size={18} /> Comprar con Google Play ($2.99)
+              </button>
+              <small style={{ display: 'block', fontSize: '0.72rem', color: '#9ca3af' }}>
+                Procesado de forma segura a través de Google Play Store.
+              </small>
+            </div>
+          ) : (
+            /* --- WEB BROWSER (MERCADO PAGO / PAYPAL) --- */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button 
+                onClick={handleMercadoPagoClick}
+                disabled={isRedirecting}
+                className="btn w-full" 
+                style={{ background: '#009ee3', color: '#fff', fontWeight: 'bold' }}
+              >
+                {isRedirecting ? 'Conectando...' : 'Pagar con Yape / Tarjeta (Perú)'}
+              </button>
+              
+              <a 
+                href={`https://paypal.me/tu_usuario/5usd`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="btn w-full" 
+                style={{ background: '#003087', color: '#fff', fontWeight: 'bold' }}
+              >
+                Pagar con PayPal (Internacional)
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>
