@@ -84,6 +84,8 @@ function App() {
   const [pointSize, setPointSize] = useState(3);
   const [pathScale, setPathScale] = useState(1);
   const [snapRadius, setSnapRadius] = useState(15);
+  const [epicycleShape, setEpicycleShape] = useState('circle');
+  const [exportQuality, setExportQuality] = useState('480p');
   
   const animationSpeedRef = useRef(animationSpeed);
   useEffect(() => {
@@ -296,10 +298,24 @@ function App() {
       
       const stream = canvas.captureStream(60);
       
+      const BITRATES = {
+        '480p': 2500000,
+        '720p': 5000000,
+        '1080p': 12000000,
+        '2k': 24000000,
+        '4k': 50000000
+      };
+      
       // Determine best available codec (some browsers support h264 for webm which converts better to mp4)
-      let options = { mimeType: 'video/webm' };
+      let options = { 
+        mimeType: 'video/webm',
+        videoBitsPerSecond: BITRATES[exportQuality] || 5000000
+      };
       if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
-        options = { mimeType: 'video/webm;codecs=h264' };
+        options = { 
+          mimeType: 'video/webm;codecs=h264',
+          videoBitsPerSecond: BITRATES[exportQuality] || 5000000
+        };
       }
       
       const mediaRecorder = new MediaRecorder(stream, options);
@@ -393,6 +409,7 @@ function App() {
           pathThickness={pathThickness}
           pointSize={pointSize}
           snapRadius={snapRadius}
+          epicycleShape={epicycleShape}
         />
         
         {!isRecording && (
@@ -408,21 +425,21 @@ function App() {
       </div>
 
       <Toolbar 
-      isPremium={isPremium}
-      session={session}
-      onLoginClick={() => setShowAuth(true)}
-      onLogout={() => supabase.auth.signOut()}
-      currentPoints={points}
-      onLoadProject={(pts) => { 
-        setPath([]); 
-        setFourier([]); 
-        setIsAnimating(false);
-        const newHistory = pointsHistory.slice(0, historyIndex + 1);
-        newHistory.push(pts);
-        setPointsHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
-      }}
-      mode={mode}
+        isPremium={isPremium}
+        session={session}
+        onLoginClick={() => setShowAuth(true)}
+        onLogout={() => supabase.auth.signOut()}
+        currentPoints={points}
+        onLoadProject={(pts) => { 
+          setPath([]); 
+          setFourier([]); 
+          setIsAnimating(false);
+          const newHistory = pointsHistory.slice(0, historyIndex + 1);
+          newHistory.push(pts);
+          setPointsHistory(newHistory);
+          setHistoryIndex(newHistory.length - 1);
+        }}
+        mode={mode}
         setMode={setMode}
         onImageUpload={setBgImage}
         onClear={handleClear}
@@ -444,6 +461,10 @@ function App() {
         setSnapRadius={setSnapRadius}
         pointSize={pointSize}
         setPointSize={setPointSize}
+        epicycleShape={epicycleShape}
+        setEpicycleShape={setEpicycleShape}
+        exportQuality={exportQuality}
+        setExportQuality={setExportQuality}
         onRecord={handleRecordToggle}
         isRecording={isRecording}
         recordingUrl={recordingUrl}

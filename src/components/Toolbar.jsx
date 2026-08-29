@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
-  Spline, Crosshair, FolderOpen, User, Sparkles, Clapperboard, Brush, Layers
+  Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -22,6 +22,8 @@ export default function Toolbar({
   pathColor, setPathColor, epicycleThickness, setEpicycleThickness,
   pathThickness, setPathThickness, pathScale, setPathScale, pointSize, setPointSize,
   snapRadius, setSnapRadius,
+  epicycleShape = 'circle', setEpicycleShape,
+  exportQuality = '480p', setExportQuality,
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
   onSavePoints, onLoadPoints, onLoadProject
 }) {
@@ -69,34 +71,18 @@ export default function Toolbar({
     }
   };
 
-  // Recording mode — minimal overlay
-  if (isRecording) {
-    return (
-      <div className="recording-indicator glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="dot"></span>
-          <span style={{ fontSize: '0.85rem' }}>Grabando... Se detiene al terminar el ciclo.</span>
-        </div>
-        <button className="btn danger w-full" onClick={onRecord}>
-          <Square size={16} /> Detener
-        </button>
-      </div>
-    );
-  }
-
-  /* ---- TAB CONTENT PANELS ---- */
   const renderTabContent = () => {
     switch (activeTab) {
       case 'draw':
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <h3>Modo de dibujo</h3>
+              <h3>Trazado</h3>
               <div className="button-row">
-                <button className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} onClick={() => setMode('draw-pencil')} title="Lápiz (Libre)">
-                  <Pencil size={18} />
+                <button className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} onClick={() => setMode('draw-pencil')} title="Lápiz Libre">
+                  <PenTool size={18} />
                 </button>
-                <button className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} onClick={() => setMode('draw-line')} title="Líneas Rectas">
+                <button className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} onClick={() => setMode('draw-line')} title="Línea Recta">
                   <Minus size={18} />
                 </button>
                 <button className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} onClick={() => setMode('draw-curve')} title="Curva Suave">
@@ -136,6 +122,31 @@ export default function Toolbar({
       case 'style':
         return (
           <div className="toolbar-sections">
+            <div className="control-group">
+              <h3>Forma de Rotores</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
+                {[
+                  { id: 'circle', label: 'Círculo', icon: '⚪' },
+                  { id: 'triangle', label: 'Triángulo', icon: '🔺' },
+                  { id: 'square', label: 'Cuadrado', icon: '🟦' },
+                  { id: 'star', label: 'Estrella', icon: '⭐' },
+                  { id: 'pentagon', label: 'Pentágono', icon: '⬟' },
+                  { id: 'hexagon', label: 'Hexágono', icon: '⬡' },
+                ].map(shape => (
+                  <button
+                    key={shape.id}
+                    type="button"
+                    className={`btn ${epicycleShape === shape.id ? 'primary' : ''}`}
+                    style={{ padding: '6px 4px', fontSize: '0.72rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}
+                    onClick={() => setEpicycleShape && setEpicycleShape(shape.id)}
+                  >
+                    <span style={{ fontSize: '1rem' }}>{shape.icon}</span>
+                    <span>{shape.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="control-group">
               <h3>Colores</h3>
               <div className="color-picker-row">
@@ -190,10 +201,63 @@ export default function Toolbar({
             </div>
 
             <div className="control-group">
-              <h3>Grabación</h3>
+              <h3>Calidad de Exportación</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                {[
+                  { id: '480p', label: '480p SD', badge: 'Gratis', unlocked: true },
+                  { id: '720p', label: '720p HD', badge: '🔓 Con Cuenta', unlocked: !!session || isPremium },
+                  { id: '1080p', label: '1080p FHD', badge: '⭐ Premium', unlocked: isPremium },
+                  { id: '2k', label: '2K QHD', badge: '⭐ Premium', unlocked: isPremium },
+                  { id: '4k', label: '4K Ultra HD', badge: '⭐ Premium', unlocked: isPremium },
+                ].map(item => {
+                  const isSelected = exportQuality === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        if (item.unlocked) {
+                          setExportQuality && setExportQuality(item.id);
+                        } else if (!session) {
+                          onLoginClick();
+                        } else {
+                          setActiveTab('project');
+                          alert("Esta resolución (" + item.label + ") requiere suscripción Premium. ¡Desbloquéala en la pestaña Proyecto!");
+                        }
+                      }}
+                      className={`btn ${isSelected ? 'primary' : ''}`}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        fontSize: '0.8rem',
+                        opacity: item.unlocked ? 1 : 0.65,
+                        border: isSelected ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.08)',
+                        background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.03)'
+                      }}
+                    >
+                      <span style={{ fontWeight: isSelected ? 'bold' : 'normal' }}>{item.label}</span>
+                      <span style={{
+                        fontSize: '0.7rem',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        background: item.unlocked ? (item.badge.includes('Premium') ? 'rgba(234, 179, 8, 0.2)' : 'rgba(16, 185, 129, 0.2)') : 'rgba(239, 68, 68, 0.2)',
+                        color: item.unlocked ? (item.badge.includes('Premium') ? '#facc15' : '#34d399') : '#f87171'
+                      }}>
+                        {item.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="control-group">
+              <h3>Grabación de Video</h3>
               <button className={`btn ${isRecording ? 'danger' : 'accent'} w-full`} onClick={onRecord}>
                 <Video size={18} />
-                {isRecording ? 'Detener Grabación' : 'Grabar Video'}
+                {isRecording ? 'Detener Grabación' : `Grabar en ${exportQuality.toUpperCase()}`}
               </button>
               
               {(recordingUrl || recordingMp4Url) && (
@@ -219,7 +283,7 @@ export default function Toolbar({
           <div className="toolbar-sections">
             {!session ? (
               <button onClick={onLoginClick} className="btn primary w-full">
-                <User size={16} /> Iniciar Sesión
+                <User size={16} /> Iniciar Sesión / Registrarse
               </button>
             ) : (
               <Dashboard 
@@ -258,68 +322,69 @@ export default function Toolbar({
 
   return (
     <>
-      {/* ===== DESKTOP SIDEBAR ===== */}
-      <div className="toolbar-container">
-        <div className="toolbar-header">
-          <h1><PenTool size={20} /> Epiciclos</h1>
+      {/* DESKTOP FLOATING SIDEBAR */}
+      <div className="desktop-toolbar glass-panel">
+        <div className="toolbar-tabs-header">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.label}
+              >
+                <Icon size={18} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
+        <div className="toolbar-body">
+          {renderTabContent()}
+        </div>
+      </div>
 
-        {/* Tabs navigation */}
-        <div className="tabs-nav">
-          {TABS.map(tab => (
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="mobile-bottom-nav glass-panel">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id && mobileSheetOpen;
+          return (
             <button
               key={tab.id}
-              className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              className={`bottom-nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => handleMobileTabClick(tab.id)}
             >
-              <tab.icon size={18} />
-              {tab.label}
+              <Icon size={20} />
+              <span>{tab.label}</span>
             </button>
-          ))}
-        </div>
-
-        {/* Tab content */}
-        <div className="tab-content">
-          {renderTabContent()}
-        </div>
-      </div>
-
-      {/* ===== MOBILE: BOTTOM SHEET + BOTTOM NAV ===== */}
-      
-      {/* Overlay */}
-      <div 
-        className={`bottom-sheet-overlay ${mobileSheetOpen ? 'visible' : ''}`}
-        onClick={() => setMobileSheetOpen(false)}
-      />
-
-      {/* Bottom Sheet */}
-      <div className={`bottom-sheet ${mobileSheetOpen ? 'open' : ''}`}>
-        <div className="bottom-sheet-handle" onClick={() => setMobileSheetOpen(false)} />
-        <div className="bottom-sheet-title">
-          {TABS.find(t => t.id === activeTab)?.label}
-        </div>
-        <div className="bottom-sheet-body">
-          {renderTabContent()}
-        </div>
-      </div>
-
-      {/* Bottom Navigation Bar */}
-      <nav className="bottom-nav">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            className={`bottom-nav-btn ${activeTab === tab.id && mobileSheetOpen ? 'active' : ''}`}
-            onClick={() => handleMobileTabClick(tab.id)}
-          >
-            <tab.icon size={20} />
-            {tab.label}
-          </button>
-        ))}
+          );
+        })}
       </nav>
 
-      {/* Ad interstitial */}
+      {/* MOBILE BOTTOM SHEET MODAL */}
+      {mobileSheetOpen && (
+        <div className="mobile-bottom-sheet glass-panel">
+          <div className="sheet-handle" onClick={() => setMobileSheetOpen(false)}>
+            <div className="handle-bar" />
+          </div>
+          <div className="sheet-header">
+            <h3>{TABS.find(t => t.id === activeTab)?.label}</h3>
+            <button className="sheet-close-btn" onClick={() => setMobileSheetOpen(false)}>✕</button>
+          </div>
+          <div className="sheet-content">
+            {renderTabContent()}
+          </div>
+        </div>
+      )}
+
+      {/* INTERSTITIAL AD MODAL */}
       {pendingDownload && (
-        <AdInterstitialModal onSkip={executeDownload} />
+        <AdInterstitialModal
+          onSkip={executeDownload}
+          title="Preparando tu descarga"
+        />
       )}
     </>
   );

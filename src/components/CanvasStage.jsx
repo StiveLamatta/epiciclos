@@ -22,7 +22,8 @@ export default function CanvasStage({
   epicycleThickness = 1,
   pathThickness = 3,
   pointSize = 3,
-  snapRadius = 15
+  snapRadius = 15,
+  epicycleShape = 'circle'
 }) {
   const [image] = useImage(bgImage);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -204,6 +205,27 @@ export default function CanvasStage({
   const epicycleStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
   const epicycleLineStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
 
+  const getPolygonPoints = (cx, cy, r, theta, sides) => {
+    const pts = [];
+    for (let k = 0; k < sides; k++) {
+      const angle = theta + (2 * Math.PI * k) / sides;
+      pts.push(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+    }
+    return pts;
+  };
+
+  const getStarPoints = (cx, cy, r, theta, points = 5) => {
+    const pts = [];
+    const innerR = r * 0.42;
+    const step = Math.PI / points;
+    for (let k = 0; k < points * 2; k++) {
+      const currentR = k % 2 === 0 ? r : innerR;
+      const angle = theta + k * step;
+      pts.push(cx + currentR * Math.cos(angle), cy + currentR * Math.sin(angle));
+    }
+    return pts;
+  };
+
   const renderPoints = useMemo(() => {
     if (mode === 'draw-curve') {
       return generateSpline(displayPoints, 20, false);
@@ -225,12 +247,65 @@ export default function CanvasStage({
       let freq = fourier[i].freq;
       let radius = fourier[i].amp;
       let phase = fourier[i].phase;
+      let angle = freq * time + phase;
       
-      x += radius * Math.cos(freq * time + phase);
-      y += radius * Math.sin(freq * time + phase);
-      
-      epicycles.push(
-        <React.Fragment key={i}>
+      x += radius * Math.cos(angle);
+      y += radius * Math.sin(angle);
+
+      let shapeElement = null;
+      if (epicycleShape === 'triangle') {
+        shapeElement = (
+          <Line
+            points={getPolygonPoints(prevX, prevY, radius, angle, 3)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else if (epicycleShape === 'square') {
+        shapeElement = (
+          <Line
+            points={getPolygonPoints(prevX, prevY, radius, angle, 4)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else if (epicycleShape === 'pentagon') {
+        shapeElement = (
+          <Line
+            points={getPolygonPoints(prevX, prevY, radius, angle, 5)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else if (epicycleShape === 'hexagon') {
+        shapeElement = (
+          <Line
+            points={getPolygonPoints(prevX, prevY, radius, angle, 6)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else if (epicycleShape === 'star') {
+        shapeElement = (
+          <Line
+            points={getStarPoints(prevX, prevY, radius, angle, 5)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else {
+        // Círculo tradicional por defecto
+        shapeElement = (
           <Circle
             x={prevX}
             y={prevY}
@@ -239,6 +314,12 @@ export default function CanvasStage({
             strokeWidth={epicycleThickness}
             listening={false}
           />
+        );
+      }
+      
+      epicycles.push(
+        <React.Fragment key={i}>
+          {shapeElement}
           <Line
             points={[prevX, prevY, x, y]}
             stroke={epicycleLineStroke}
