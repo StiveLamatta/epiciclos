@@ -7,6 +7,7 @@ import { supabase } from './lib/supabase';
 import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
 import AdBanner from './components/AdBanner';
+import { isNative } from './services/platform';
 import './App.css';
 
 function App() {
@@ -379,9 +380,18 @@ function App() {
   };
 
   return (
-    <div className="app-container" style={{ position: 'relative' }}>
+    <div 
+      className="app-container" 
+      style={{ 
+        position: 'relative', 
+        paddingTop: isNative() && !isPremium ? '56px' : '0',
+        height: '100dvh',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
+      }}
+    >
       <div className="canvas-area">
-        {!isPremium && (
+        {!isPremium && !isNative() && (
           <div style={{ position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '100%', maxWidth: '728px', padding: '0 12px' }}>
             <AdBanner type="top" />
           </div>
