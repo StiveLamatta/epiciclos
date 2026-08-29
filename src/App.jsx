@@ -133,6 +133,60 @@ function App() {
     height: window.innerHeight,
   });
 
+  // Cuadro de Grabación Delimitado
+  const [showRecordingBox, setShowRecordingBox] = useState(false);
+  const [recordingBox, setRecordingBox] = useState({ 
+    x: window.innerWidth / 2 - 160, 
+    y: window.innerHeight / 2 - 160, 
+    width: 320, 
+    height: 320 
+  });
+
+  // Estado de Renderizado de Video Offline a 60 FPS
+  const [isRenderingVideo, setIsRenderingVideo] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const canvasStageRef = useRef(null);
+
+  const handleStartRenderVideo = async () => {
+    if (isRenderingVideo) {
+      setIsRenderingVideo(false);
+      return;
+    }
+    if (!fourier || fourier.length === 0) {
+      alert("Dibuja una figura primero para generar los epiciclos.");
+      return;
+    }
+
+    setIsRenderingVideo(true);
+    setRenderProgress(0);
+
+    try {
+      const { blob, url } = await renderFourierVideoOffline({
+        fourier,
+        origin,
+        epicycleShape,
+        customRotorShape,
+        epicycleColor,
+        pathColor,
+        epicycleThickness,
+        pathThickness,
+        exportQuality,
+        recordingBox: showRecordingBox ? recordingBox : null,
+        onProgress: (p) => setRenderProgress(p)
+      });
+
+      setIsRenderingVideo(false);
+      setRecordingUrl(url);
+      
+      // Descargar o compartir el video 60 FPS inmediatamente
+      downloadOrShareVideo(url, 'webm');
+    } catch (err) {
+      console.error(err);
+      alert("Error al renderizar el video: " + (err.message || err));
+      setIsRenderingVideo(false);
+    }
+  };
+
   useEffect(() => {
     const handleResize = () => {
       setWindowSize({
