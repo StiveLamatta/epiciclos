@@ -5,10 +5,12 @@ import { dft } from './utils/fourier';
 import { resamplePath, getBarycenter, generateSpline } from './utils/math';
 import { supabase } from './lib/supabase';
 import AuthModal from './components/AuthModal';
-import Dashboard from './components/Dashboard';
 import AdBanner from './components/AdBanner';
+import TopQuickbar from './components/TopQuickbar';
 import { isNative } from './services/platform';
 import { showNativeBanner, hideNativeBanner } from './services/admob';
+import { renderFourierVideoOffline } from './utils/videoRenderer';
+import { downloadOrShareVideo } from './services/downloader';
 import './App.css';
 
 function App() {
@@ -370,12 +372,13 @@ function App() {
   const handleSavePoints = () => {
     if (points.length === 0) return;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(points));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", "epiciclos_puntos.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    const jsonStr = JSON.stringify(points);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `epiciclos_${Date.now()}.json`;
+    a.click();
   };
 
   const handleLoadPoints = (e) => {
@@ -407,13 +410,36 @@ function App() {
         overflow: 'hidden'
       }}
     >
+      {/* TIRA DE ACCESOS RÁPIDOS SUPERIOR HORIZONTAL */}
+      <TopQuickbar
+        mode={mode}
+        setMode={setMode}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={historyIndex > 0}
+        canRedo={historyIndex < pointsHistory.length - 1}
+        onClear={handleClear}
+        onZoomIn={() => canvasStageRef.current?.zoomIn()}
+        onZoomOut={() => canvasStageRef.current?.zoomOut()}
+        onResetView={() => canvasStageRef.current?.resetView()}
+        isAnimating={isAnimating}
+        onToggleAnimation={handleToggleAnimation}
+        showRecordingBox={showRecordingBox}
+        setShowRecordingBox={setShowRecordingBox}
+        isRenderingVideo={isRenderingVideo}
+        onStartRenderVideo={handleStartRenderVideo}
+      />
+
       <div className="canvas-area">
         {!effectivePremium && !isNative() && (
-          <div style={{ position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '100%', maxWidth: '728px', padding: '0 12px' }}>
+          <div style={{ position: 'absolute', top: '48px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '100%', maxWidth: '728px', padding: '0 12px' }}>
             <AdBanner type="top" />
           </div>
         )}
         <CanvasStage
+          ref={canvasStageRef}
           width={windowSize.width}
           height={windowSize.height}
           mode={mode}
@@ -439,6 +465,9 @@ function App() {
           snapRadius={snapRadius}
           epicycleShape={epicycleShape}
           customRotorShape={customRotorShape}
+          recordingBox={recordingBox}
+          setRecordingBox={setRecordingBox}
+          showRecordingBox={showRecordingBox}
         />
         
         {!isRecording && (
@@ -453,6 +482,35 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* TARJETA DE PROGRESO DE RENDERIZADO EN SEGUNDO PLANO */}
+      {isRenderingVideo && (
+        <div className="render-progress-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#38bdf8' }}>
+              🎬 Renderizando 60 FPS ({exportQuality.toUpperCase()})
+            </span>
+            <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#f1f5f9' }}>
+              {renderProgress}%
+            </span>
+          </div>
+          <div className="render-progress-bar-bg">
+            <div className="render-progress-bar-fill" style={{ width: `${renderProgress}%` }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+            <small style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+              Generando animación fluida en segundo plano...
+            </small>
+            <button 
+              className="btn danger" 
+              style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+              onClick={() => setIsRenderingVideo(false)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <Toolbar 
         isPremium={effectivePremium}

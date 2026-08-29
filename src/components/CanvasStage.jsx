@@ -1,9 +1,9 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { Stage, Layer, Image, Line, Circle } from 'react-konva';
+import React, { useRef, useState, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { Stage, Layer, Image, Line, Circle, Rect, Group, Text } from 'react-konva';
 import useImage from 'use-image';
 import { generateSpline } from '../utils/math';
 
-export default function CanvasStage({
+const CanvasStage = forwardRef(function CanvasStage({
   width,
   height,
   mode,
@@ -25,8 +25,11 @@ export default function CanvasStage({
   pointSize = 3,
   snapRadius = 15,
   epicycleShape = 'circle',
-  customRotorShape = null
-}) {
+  customRotorShape = null,
+  recordingBox,
+  setRecordingBox,
+  showRecordingBox = false
+}, ref) {
   const [image] = useImage(bgImage);
   const [isDrawing, setIsDrawing] = useState(false);
   
@@ -38,6 +41,21 @@ export default function CanvasStage({
   const [stageY, setStageY] = useState(0);
   
   const displayPoints = localPoints || points;
+
+  // Exponer métodos de zoom y vista al componente padre
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => {
+      setStageScale(prev => Math.min(prev * 1.3, 10));
+    },
+    zoomOut: () => {
+      setStageScale(prev => Math.max(prev / 1.3, 0.1));
+    },
+    resetView: () => {
+      setStageScale(1);
+      setStageX(0);
+      setStageY(0);
+    }
+  }));
 
   // Arrow Keys Panning
   useEffect(() => {
@@ -79,13 +97,13 @@ export default function CanvasStage({
 
   const handleMouseDown = (e) => {
     if (isRecording) return;
-    // Si no estamos en la pestaña de dibujo, el lienzo sólo sirve para desplazar (pan)
+    // Si no estamos en la pestaña de dibujo y no es mover origen, el lienzo sólo sirve para desplazar
     if (activeTab !== 'draw' && mode !== 'moveOrigin') return;
 
     const stage = e.target.getStage();
     const rawPos = getRelativePointerPosition(stage);
 
-    if (e.target.className === 'Circle' && mode === 'edit') return; 
+    if (e.target.className === 'Circle' && (mode === 'edit' || e.target.attrs.name === 'boxHandle')) return; 
 
     if (mode === 'draw-pencil') {
       setIsDrawing(true);
@@ -144,6 +162,7 @@ export default function CanvasStage({
 
     let newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
     if (newScale < 0.1) newScale = 0.1;
+    if (newScale > 10) newScale = 10;
 
     setStageScale(newScale);
     setStageX(pointer.x - mousePointTo.x * newScale);
@@ -227,13 +246,13 @@ export default function CanvasStage({
     return pts;
   };
 
-  // Generador de Corazón (Muesca en el centro (cx, cy) y punta en el radio (cx + r*cos, cy + r*sin))
+  // Generador de Corazón
   const getHeartPoints = (cx, cy, r, theta, samples = 25) => {
     const pts = [];
     const cosT = Math.cos(theta);
     const sinT = Math.sin(theta);
     
-    // Lado derecho del corazón: de la muesca (0,0) a la punta (r,0)
+    // Lado derecho
     const p0 = { u: 0, v: 0 };
     const p1 = { u: -0.22 * r, v: 0.58 * r };
     const p2 = { u: 0.45 * r, v: 0.68 * r };
@@ -246,7 +265,7 @@ export default function CanvasStage({
       pts.push(cx + u * cosT - v * sinT, cy + u * sinT + v * cosT);
     }
     
-    // Lado izquierdo del corazón: de la punta (r,0) de regreso a la muesca (0,0)
+    // Lado izquierdo
     const q0 = { u: r, v: 0 };
     const q1 = { u: 0.45 * r, v: -0.68 * r };
     const q2 = { u: -0.22 * r, v: -0.58 * r };
@@ -277,8 +296,8 @@ export default function CanvasStage({
   };
 
   const renderPoints = useMemo(() => {
-    if (mode === 'draw-curve') {
-      return generateSpline(displayPoints, 20, false);
+    if (mode === 'draw-curve' && displayPoints.length >= 3) {
+      return generateSpline(displayPoints, 16, false);
     }
     return displayPoints;
   }, [displayPoints, mode]);
@@ -374,7 +393,6 @@ export default function CanvasStage({
           />
         );
       } else {
-        // Círculo tradicional
         shapeElement = (
           <Circle
             x={prevX}
@@ -412,7 +430,7 @@ export default function CanvasStage({
     );
   }
 
-  // Permitir arrastre del lienzo si estamos en modo pan o en otra pestaña que no sea dibujo
+  // Permitir arrastre universal del lienzo cuando no se dibuja activamente
   const isPanEnabled = mode === 'pan' || activeTab !== 'draw';
 
   return (
@@ -459,6 +477,7 @@ export default function CanvasStage({
           
           let newScale = oldScale * scaleBy;
           if (newScale < 0.1) newScale = 0.1;
+          if (newScale > 10) newScale = 10;
 
           const clientX = (touch1.clientX + touch2.clientX) / 2;
           const clientY = (touch1.clientY + touch2.clientY) / 2;
@@ -504,15 +523,14 @@ export default function CanvasStage({
           <Line
             points={linePoints}
             stroke="#ef4444"
-            strokeWidth={2}
-            tension={mode === 'draw-curve' ? 0.5 : 0}
+            strokeWidth={2 / stageScale}
             lineCap="round"
             lineJoin="round"
             listening={false}
           />
         )}
 
-        {/* Edit Points (Control Points) and Snapping Zones */}
+        {/* Edit Points & Snapping */}
         {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && displayPoints.map((p, i) => (
           <React.Fragment key={i}>
             {(mode === 'draw-line' || mode === 'draw-curve') && (
@@ -521,14 +539,14 @@ export default function CanvasStage({
                 y={p.y}
                 radius={snapRadius}
                 stroke="rgba(16, 185, 129, 0.4)"
-                strokeWidth={1}
+                strokeWidth={1 / stageScale}
                 listening={false}
               />
             )}
             <Circle
               x={p.x}
               y={p.y}
-              radius={draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)}
+              radius={(draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)) / stageScale}
               fill={draggedPointIndex === i ? "#fff" : "#f59e0b"}
               shadowColor={draggedPointIndex === i ? "#f59e0b" : "transparent"}
               shadowBlur={draggedPointIndex === i ? 10 : 0}
@@ -536,22 +554,6 @@ export default function CanvasStage({
               onDragStart={(e) => handlePointDragStart(e, i)}
               onDragMove={(e) => handlePointDragMove(e, i)}
               onDragEnd={handlePointDragEnd}
-              onMouseEnter={(e) => {
-                if (mode === 'edit') e.target.getStage().container().style.cursor = 'grab';
-                if (mode.startsWith('draw') && mode !== 'draw-pencil') {
-                  e.target.fill('#10b981');
-                  e.target.radius(pointSize + 3);
-                  e.target.draw();
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.target.getStage().container().style.cursor = 'default';
-                if (mode.startsWith('draw') && mode !== 'draw-pencil') {
-                  e.target.fill('#f59e0b');
-                  e.target.radius(pointSize);
-                  e.target.draw();
-                }
-              }}
             />
           </React.Fragment>
         ))}
@@ -573,21 +575,92 @@ export default function CanvasStage({
           <Circle
             x={origin.x}
             y={origin.y}
-            radius={pointSize + 5}
+            radius={(pointSize + 5) / stageScale}
             fill={mode === 'moveOrigin' ? "#10b981" : "#475569"}
             draggable={mode === 'moveOrigin'}
             onDragMove={handleDragOrigin}
-            onMouseEnter={(e) => {
-              if(mode === 'moveOrigin') {
-                e.target.getStage().container().style.cursor = 'grab';
+          />
+        )}
+
+        {/* CUADRO / MARCO DE GRABACIÓN AJUSTABLE */}
+        {showRecordingBox && recordingBox && !isRecording && (
+          <Group
+            x={recordingBox.x}
+            y={recordingBox.y}
+            draggable={true}
+            onDragEnd={(e) => {
+              if (setRecordingBox) {
+                setRecordingBox(prev => ({
+                  ...prev,
+                  x: e.target.x(),
+                  y: e.target.y()
+                }));
               }
             }}
-            onMouseLeave={(e) => {
-              e.target.getStage().container().style.cursor = 'default';
-            }}
-          />
+          >
+            {/* Fondo y contorno del marco */}
+            <Rect
+              width={recordingBox.width}
+              height={recordingBox.height}
+              stroke="#38bdf8"
+              strokeWidth={2 / stageScale}
+              dash={[8 / stageScale, 6 / stageScale]}
+              fill="rgba(56, 189, 248, 0.05)"
+            />
+
+            {/* Líneas de guía tercios */}
+            <Line
+              points={[recordingBox.width / 3, 0, recordingBox.width / 3, recordingBox.height]}
+              stroke="rgba(56, 189, 248, 0.25)"
+              strokeWidth={1 / stageScale}
+              listening={false}
+            />
+            <Line
+              points={[(recordingBox.width * 2) / 3, 0, (recordingBox.width * 2) / 3, recordingBox.height]}
+              stroke="rgba(56, 189, 248, 0.25)"
+              strokeWidth={1 / stageScale}
+              listening={false}
+            />
+            <Line
+              points={[0, recordingBox.height / 3, recordingBox.width, recordingBox.height / 3]}
+              stroke="rgba(56, 189, 248, 0.25)"
+              strokeWidth={1 / stageScale}
+              listening={false}
+            />
+            <Line
+              points={[0, (recordingBox.height * 2) / 3, recordingBox.width, (recordingBox.height * 2) / 3]}
+              stroke="rgba(56, 189, 248, 0.25)"
+              strokeWidth={1 / stageScale}
+              listening={false}
+            />
+
+            {/* Manija de redimensionamiento (Esquina inferior derecha) */}
+            <Circle
+              name="boxHandle"
+              x={recordingBox.width}
+              y={recordingBox.height}
+              radius={10 / stageScale}
+              fill="#38bdf8"
+              stroke="#ffffff"
+              strokeWidth={2 / stageScale}
+              draggable={true}
+              onDragMove={(e) => {
+                const newW = Math.max(80, e.target.x());
+                const newH = Math.max(80, e.target.y());
+                if (setRecordingBox) {
+                  setRecordingBox(prev => ({
+                    ...prev,
+                    width: newW,
+                    height: newH
+                  }));
+                }
+              }}
+            />
+          </Group>
         )}
       </Layer>
     </Stage>
   );
-}
+});
+
+export default CanvasStage;

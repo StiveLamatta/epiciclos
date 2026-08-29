@@ -38,7 +38,6 @@ export function resamplePath(points, spacing = 2) {
     }
     
     if (remainingDist <= distToNext) {
-      // We can fit the next resampled point on this line segment
       const ratio = remainingDist / distToNext;
       const newX = currentPt.x + dx * ratio;
       const newY = currentPt.y + dy * ratio;
@@ -47,9 +46,8 @@ export function resamplePath(points, spacing = 2) {
       resampled.push(newPt);
       
       currentPt = newPt;
-      remainingDist = spacing; // reset for next point
+      remainingDist = spacing;
     } else {
-      // The segment is too short, jump to next point and reduce remaining dist
       remainingDist -= distToNext;
       currentPt = nextPt;
       currentPointIdx++;
@@ -77,66 +75,94 @@ export function getBarycenter(points) {
 }
 
 /**
- * Generates a smooth curve (Catmull-Rom Spline) from an array of control points.
- * Returns an array of points that form the smooth path.
- * @param {Array} points - Array of {x, y} control points
- * @param {Number} segments - Number of segments to generate between each control point
- * @param {Boolean} isClosed - Whether the curve should loop back to the start
+ * Centripetal Catmull-Rom Spline (alpha = 0.5)
+ * Prevents cusps, loops, and self-intersections.
+ * Smoothly interpolates through any 2, 3, or N control points.
  */
-export function generateSpline(points, segments = 20, isClosed = false) {
-  if (points.length < 3) return [...points];
+export function generateSpline(points, segments = 16, isClosed = false) {
+  if (!points || points.length === 0) return [];
+  if (points.length === 1) return [{ ...points[0] }];
+  if (points.length === 2) {
+    const res = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      res.push({
+        x: points[0].x + (points[1].x - points[0].x) * t,
+        y: points[0].y + (points[1].y - points[0].y) * t,
+      });
+    }
+    return res;
+  }
 
-  let p = [...points];
-  
-  // To draw a spline, we need extra points at the ends for the tension calculation.
-  // If closed, we wrap around. If open, we duplicate the ends.
+  // Helper for centripetal parameterization
+  const getT = (tPrev, pA, pB, alpha = 0.5) => {
+    const dist = Math.hypot(pB.x - pA.x, pB.y - pA.y);
+    return tPrev + Math.pow(dist, alpha);
+  };
+
+  const p = [...points];
   if (isClosed) {
     p.unshift(points[points.length - 1]);
-    p.unshift(points[points.length - 2]);
     p.push(points[0]);
     p.push(points[1]);
   } else {
-    p.unshift(points[0]);
-    p.push(points[points.length - 1]);
+    // Extrapolate virtual endpoints naturally
+    const pStart = {
+      x: points[0].x - (points[1].x - points[0].x),
+      y: points[0].y - (points[1].y - points[0].y)
+    };
+    const pEnd = {
+      x: points[points.length - 1].x + (points[points.length - 1].x - points[points.length - 2].x),
+      y: points[points.length - 1].y + (points[points.length - 1].y - points[points.length - 2].y)
+    };
+    p.unshift(pStart);
+    p.push(pEnd);
   }
 
   const result = [];
-  
-  const endIter = isClosed ? p.length - 3 : p.length - 2;
 
-  for (let i = 1; i < endIter; i++) {
+  for (let i = 1; i < p.length - 2; i++) {
     const p0 = p[i - 1];
     const p1 = p[i];
     const p2 = p[i + 1];
     const p3 = p[i + 2];
 
-    for (let t = 0; t < segments; t++) {
-      const t1 = t / segments;
-      const t2 = t1 * t1;
-      const t3 = t2 * t1;
+    const t0 = 0;
+    const t1 = getT(t0, p0, p1);
+    const t2 = getT(t1, p1, p2);
+    const t3 = getT(t2, p2, p3);
 
-      // Catmull-Rom math
-      const x = 0.5 * (
-        (2 * p1.x) +
-        (-p0.x + p2.x) * t1 +
-        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
-      );
+    // If points are coincident, skip
+    if (Math.abs(t2 - t1) < 1e-5) continue;
 
-      const y = 0.5 * (
-        (2 * p1.y) +
-        (-p0.y + p2.y) * t1 +
-        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
-      );
+    for (let s = 0; s < segments; s++) {
+      const t = t1 + (s / segments) * (t2 - t1);
 
-      result.push({ x, y });
+      // Barry-Goldman algorithm for centripetal Catmull-Rom
+      const a1_x = (t1 - t !== 0 && t1 - t0 !== 0) ? ((t1 - t) / (t1 - t0)) * p0.x + ((t - t0) / (t1 - t0)) * p1.x : p1.x;
+      const a1_y = (t1 - t !== 0 && t1 - t0 !== 0) ? ((t1 - t) / (t1 - t0)) * p0.y + ((t - t0) / (t1 - t0)) * p1.y : p1.y;
+
+      const a2_x = (t2 - t1 !== 0) ? ((t2 - t) / (t2 - t1)) * p1.x + ((t - t1) / (t2 - t1)) * p2.x : p1.x;
+      const a2_y = (t2 - t1 !== 0) ? ((t2 - t) / (t2 - t1)) * p1.y + ((t - t1) / (t2 - t1)) * p2.y : p1.y;
+
+      const a3_x = (t3 - t2 !== 0) ? ((t3 - t) / (t3 - t2)) * p2.x + ((t - t2) / (t3 - t2)) * p3.x : p2.x;
+      const a3_y = (t3 - t2 !== 0) ? ((t3 - t) / (t3 - t2)) * p2.y + ((t - t2) / (t3 - t2)) * p3.y : p2.y;
+
+      const b1_x = (t2 - t0 !== 0) ? ((t2 - t) / (t2 - t0)) * a1_x + ((t - t0) / (t2 - t0)) * a2_x : a1_x;
+      const b1_y = (t2 - t0 !== 0) ? ((t2 - t) / (t2 - t0)) * a1_y + ((t - t0) / (t2 - t0)) * a2_y : a1_y;
+
+      const b2_x = (t3 - t1 !== 0) ? ((t3 - t) / (t3 - t1)) * a2_x + ((t - t1) / (t3 - t1)) * a3_x : a2_x;
+      const b2_y = (t3 - t1 !== 0) ? ((t3 - t) / (t3 - t1)) * a2_y + ((t - t1) / (t3 - t1)) * a3_y : a2_y;
+
+      const c_x = (t2 - t1 !== 0) ? ((t2 - t) / (t2 - t1)) * b1_x + ((t - t1) / (t2 - t1)) * b2_x : b1_x;
+      const c_y = (t2 - t1 !== 0) ? ((t2 - t) / (t2 - t1)) * b1_y + ((t - t1) / (t2 - t1)) * b2_y : b1_y;
+
+      result.push({ x: c_x, y: c_y });
     }
   }
-  
-  // Add the last point if it's not closed
-  if (!isClosed) {
-    result.push(points[points.length - 1]);
+
+  if (!isClosed && points.length > 0) {
+    result.push({ ...points[points.length - 1] });
   }
 
   return result;
