@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
+import { downloadOrShareVideo } from '../services/downloader';
 
 const TABS = [
   { id: 'draw',      label: 'Dibujo',    icon: Pencil },
@@ -42,12 +43,7 @@ export default function Toolbar({
       return;
     }
     if (isPremium) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `animacion-epiciclos.${extension}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      downloadOrShareVideo(url, extension);
     } else {
       setPendingDownload({ url, extension });
     }
@@ -60,12 +56,7 @@ export default function Toolbar({
       setPendingDownload(null);
       return;
     }
-    const a = document.createElement('a');
-    a.href = pendingDownload.url;
-    a.download = `animacion-epiciclos.${pendingDownload.extension}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadOrShareVideo(pendingDownload.url, pendingDownload.extension);
     setPendingDownload(null);
   };
 
