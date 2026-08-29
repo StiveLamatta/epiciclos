@@ -29,7 +29,8 @@ export default function Toolbar({
   exportQuality = '480p', setExportQuality,
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
   onSavePoints, onLoadPoints, onLoadProject,
-  activeTab = 'draw', setActiveTab
+  activeTab = 'draw', setActiveTab,
+  isDevUser, devPremiumToggle, onToggleDevPremium
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
@@ -322,6 +323,9 @@ export default function Toolbar({
                 currentPoints={currentPoints}
                 onSaveProject={(pts) => onSavePoints(pts)}
                 onLoadProject={onLoadProject}
+                isDevUser={isDevUser}
+                devPremiumToggle={devPremiumToggle}
+                onToggleDevPremium={onToggleDevPremium}
               />
             )}
 

@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Folder, LogOut, Trash2, Cloud, AlertCircle, ShoppingBag } from 'lucide-react';
+import { Folder, LogOut, Trash2, Cloud, AlertCircle, ShoppingBag, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { isNative } from '../services/platform';
 
-export default function Dashboard({ isPremium, session, onLogout, onLoadProject, onSaveProject, currentPoints }) {
+export default function Dashboard({ 
+  isPremium, 
+  session, 
+  onLogout, 
+  onLoadProject, 
+  onSaveProject, 
+  currentPoints,
+  isDevUser,
+  devPremiumToggle,
+  onToggleDevPremium
+}) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [error, setError] = useState(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const isDev = isDevUser || session?.user?.email === 'jstivelamatta@gmail.com';
 
   const handleMercadoPagoClick = async (e) => {
     e.preventDefault();
@@ -65,77 +77,109 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!projectName.trim() || currentPoints.length === 0) return;
-    
+    if (!projectName.trim()) return;
+    if (currentPoints.length === 0) {
+      setError('No hay puntos en el lienzo para guardar.');
+      return;
+    }
+
     if (!isPremium && projects.length >= 5) {
-      setError('Límite del plan gratuito alcanzado. Sólo puedes guardar 5 proyectos. ¡Mejora a Premium para almacenamiento ilimitado!');
+      setError('Límite de 5 proyectos alcanzado para usuarios gratuitos. ¡Hazte Premium para proyectos ilimitados!');
       return;
     }
 
     setSaving(true);
     setError(null);
+
     try {
       const { data, error } = await supabase
         .from('projects')
         .insert([
-          { 
-            user_id: session.user.id, 
-            name: projectName, 
-            data_json: { points: currentPoints } 
+          {
+            user_id: session.user.id,
+            name: projectName.trim(),
+            data_json: { points: currentPoints },
           }
         ])
         .select();
 
       if (error) throw error;
+      
       setProjectName('');
-      setProjects([data[0], ...projects]);
+      fetchProjects();
     } catch (err) {
-      setError(err.message);
+      console.error('Error saving project:', err);
+      setError('Error al guardar el proyecto en la nube.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Seguro que deseas eliminar este proyecto?')) return;
-    
+    if (!window.confirm('¿Estás seguro de eliminar este proyecto?')) return;
     try {
       const { error } = await supabase
         .from('projects')
         .delete()
         .eq('id', id);
-        
+
       if (error) throw error;
       setProjects(projects.filter(p => p.id !== id));
-      setError(null);
     } catch (err) {
       console.error('Error deleting project:', err);
+      alert('No se pudo eliminar el proyecto.');
     }
   };
 
   return (
-    <div className="dashboard-panel glass-panel">
+    <div className="dashboard-container">
       <div className="dashboard-header">
-        <div className="user-info">
-          <Cloud size={20} className="text-primary" />
-          <span>{session.user.email}</span>
+        <div className="user-badge">
+          <Cloud size={16} />
+          <span className="user-email">{session.user.email}</span>
+          {isPremium ? (
+            <span className="premium-badge">⭐ VIP</span>
+          ) : (
+            <span className="free-badge">Gratis</span>
+          )}
         </div>
-        <button onClick={onLogout} className="btn icon-btn" title="Cerrar sesión">
+        <button onClick={onLogout} className="btn icon-btn" title="Cerrar Sesión">
           <LogOut size={16} />
         </button>
       </div>
 
-      <div className="dashboard-save-section">
+      {/* TARJETA VIP EXCLUSIVA PARA EL DESARROLLADOR (jstivelamatta@gmail.com) */}
+      {isDev && (
+        <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.4)', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <ShieldCheck size={16} color="#38bdf8" />
+                <h4 style={{ margin: 0, color: '#38bdf8', fontSize: '0.82rem' }}>Modo Desarrollador</h4>
+              </div>
+              <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: '#94a3b8' }}>Alternar modo para pruebas</p>
+            </div>
+            <button 
+              type="button"
+              className={`btn ${devPremiumToggle ? 'primary' : 'danger'}`}
+              style={{ padding: '6px 10px', fontSize: '0.72rem', fontWeight: 'bold' }}
+              onClick={onToggleDevPremium}
+            >
+              {devPremiumToggle ? '⭐ Premium: ON' : '🔓 Gratis (Ads): ON'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="dashboard-save-form">
         <h4>Guardar Proyecto Actual</h4>
-        <form onSubmit={handleSave} className="save-form">
+        <form onSubmit={handleSave}>
           <input 
             type="text" 
-            placeholder="Nombre del proyecto" 
-            value={projectName}
+            placeholder="Nombre del proyecto..." 
+            value={projectName} 
             onChange={(e) => setProjectName(e.target.value)}
-            disabled={saving || currentPoints.length === 0}
-            required
-            maxLength={30}
+            disabled={saving}
           />
           <button type="submit" className="btn primary" disabled={saving || currentPoints.length === 0}>
             {saving ? 'Guardando...' : 'Guardar'}
@@ -178,7 +222,6 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
           <p style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#fef08a' }}>Sin anuncios, sin esperas y proyectos ilimitados.</p>
           
           {isNative() ? (
-            /* --- NATIVE ANDROID (GOOGLE PLAY BILLING) --- */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button 
                 onClick={handleGooglePlayPurchase}
@@ -192,7 +235,6 @@ export default function Dashboard({ isPremium, session, onLogout, onLoadProject,
               </small>
             </div>
           ) : (
-            /* --- WEB BROWSER (MERCADO PAGO / PAYPAL) --- */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button 
                 onClick={handleMercadoPagoClick}

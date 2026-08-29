@@ -8,6 +8,7 @@ import AuthModal from './components/AuthModal';
 import Dashboard from './components/Dashboard';
 import AdBanner from './components/AdBanner';
 import { isNative } from './services/platform';
+import { showNativeBanner, hideNativeBanner } from './services/admob';
 import './App.css';
 
 function App() {
@@ -15,7 +16,11 @@ function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isPremium, setIsPremium] = useState(false);
+  const [devPremiumToggle, setDevPremiumToggle] = useState(true); // Default ON for developer
   
+  const isDevUser = session?.user?.email === 'jstivelamatta@gmail.com';
+  const effectivePremium = isPremium || (isDevUser && devPremiumToggle);
+
   const checkPremium = async (currentSession) => {
     if (!currentSession) {
       setIsPremium(false);
@@ -33,6 +38,16 @@ function App() {
       setIsPremium(false);
     }
   };
+
+  useEffect(() => {
+    if (isNative()) {
+      if (!effectivePremium) {
+        showNativeBanner();
+      } else {
+        hideNativeBanner();
+      }
+    }
+  }, [effectivePremium]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -386,14 +401,14 @@ function App() {
       className="app-container" 
       style={{ 
         position: 'relative', 
-        paddingTop: isNative() && !isPremium ? '56px' : '0',
+        paddingTop: isNative() && !effectivePremium ? '56px' : '0',
         height: '100dvh',
         boxSizing: 'border-box',
         overflow: 'hidden'
       }}
     >
       <div className="canvas-area">
-        {!isPremium && !isNative() && (
+        {!effectivePremium && !isNative() && (
           <div style={{ position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)', zIndex: 5, width: '100%', maxWidth: '728px', padding: '0 12px' }}>
             <AdBanner type="top" />
           </div>
@@ -440,8 +455,11 @@ function App() {
       </div>
 
       <Toolbar 
-        isPremium={isPremium}
+        isPremium={effectivePremium}
         session={session}
+        isDevUser={isDevUser}
+        devPremiumToggle={devPremiumToggle}
+        onToggleDevPremium={() => setDevPremiumToggle(prev => !prev)}
         onLoginClick={() => setShowAuth(true)}
         onLogout={() => supabase.auth.signOut()}
         currentPoints={points}
