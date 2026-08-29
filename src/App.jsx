@@ -86,7 +86,9 @@ function App() {
   const [pathScale, setPathScale] = useState(1);
   const [snapRadius, setSnapRadius] = useState(15);
   const [epicycleShape, setEpicycleShape] = useState('circle');
+  const [customRotorShape, setCustomRotorShape] = useState(null);
   const [exportQuality, setExportQuality] = useState('480p');
+  const [activeTab, setActiveTab] = useState('draw');
   
   const animationSpeedRef = useRef(animationSpeed);
   useEffect(() => {
@@ -400,6 +402,7 @@ function App() {
           width={windowSize.width}
           height={windowSize.height}
           mode={mode}
+          activeTab={activeTab}
           bgImage={bgImage}
           points={points}
           commitPoints={commitPoints}
@@ -420,16 +423,18 @@ function App() {
           pointSize={pointSize}
           snapRadius={snapRadius}
           epicycleShape={epicycleShape}
+          customRotorShape={customRotorShape}
         />
         
         {!isRecording && (
           <div className="status-bar">
-            {mode === 'draw-pencil' && 'Lápiz — Arrastra para dibujar'}
-            {mode === 'draw-line' && 'Línea — Clic para crear puntos'}
-            {mode === 'draw-curve' && 'Curva — Clic para crear puntos suaves'}
-            {mode === 'edit' && 'Edición — Arrastra los puntos'}
-            {mode === 'moveOrigin' && 'Arrastra el punto verde (centro)'}
-            {mode === 'pan' && 'Arrastra para mover • Scroll para zoom'}
+            {activeTab !== 'draw' && 'Desplazamiento — Arrastra con el dedo para mover el lienzo'}
+            {activeTab === 'draw' && mode === 'draw-pencil' && 'Lápiz — Arrastra para dibujar'}
+            {activeTab === 'draw' && mode === 'draw-line' && 'Línea — Clic para crear puntos'}
+            {activeTab === 'draw' && mode === 'draw-curve' && 'Curva — Clic para crear puntos suaves'}
+            {activeTab === 'draw' && mode === 'edit' && 'Edición — Arrastra los puntos'}
+            {activeTab === 'draw' && mode === 'moveOrigin' && 'Arrastra el punto verde (centro)'}
+            {activeTab === 'draw' && mode === 'pan' && 'Arrastra para mover • Scroll para zoom'}
           </div>
         )}
       </div>
@@ -473,8 +478,12 @@ function App() {
         setPointSize={setPointSize}
         epicycleShape={epicycleShape}
         setEpicycleShape={setEpicycleShape}
+        customRotorShape={customRotorShape}
+        setCustomRotorShape={setCustomRotorShape}
         exportQuality={exportQuality}
         setExportQuality={setExportQuality}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         onRecord={handleRecordToggle}
         isRecording={isRecording}
         recordingUrl={recordingUrl}

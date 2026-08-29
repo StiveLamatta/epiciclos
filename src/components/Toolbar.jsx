@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { 
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
-  Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers
+  Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
+  Heart, Shapes, PlusCircle
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
+import CustomRotorModal from './CustomRotorModal';
 import { downloadOrShareVideo } from '../services/downloader';
 
 const TABS = [
@@ -23,13 +25,15 @@ export default function Toolbar({
   pathThickness, setPathThickness, pathScale, setPathScale, pointSize, setPointSize,
   snapRadius, setSnapRadius,
   epicycleShape = 'circle', setEpicycleShape,
+  customRotorShape, setCustomRotorShape,
   exportQuality = '480p', setExportQuality,
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
-  onSavePoints, onLoadPoints, onLoadProject
+  onSavePoints, onLoadPoints, onLoadProject,
+  activeTab = 'draw', setActiveTab
 }) {
-  const [activeTab, setActiveTab] = useState('draw');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
+  const [showCustomModal, setShowCustomModal] = useState(false);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -66,9 +70,14 @@ export default function Toolbar({
     if (activeTab === tabId && mobileSheetOpen) {
       setMobileSheetOpen(false);
     } else {
-      setActiveTab(tabId);
+      if (setActiveTab) setActiveTab(tabId);
       setMobileSheetOpen(true);
     }
+  };
+
+  const handleRecordClick = () => {
+    setMobileSheetOpen(false); // Minimiza el menú de opciones para no tapar la grabación
+    onRecord();
   };
 
   const renderTabContent = () => {
@@ -123,25 +132,45 @@ export default function Toolbar({
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <h3>Forma de Rotores</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0 }}>Forma de Rotores</h3>
+                <button 
+                  type="button" 
+                  className="btn" 
+                  style={{ padding: '3px 8px', fontSize: '0.72rem', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                  onClick={() => setShowCustomModal(true)}
+                >
+                  <PlusCircle size={13} /> Diseñar Forma
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '6px' }}>
                 {[
                   { id: 'circle', label: 'Círculo', icon: '⚪' },
                   { id: 'triangle', label: 'Triángulo', icon: '🔺' },
+                  { id: 'heart', label: 'Corazón', icon: '❤️' },
                   { id: 'square', label: 'Cuadrado', icon: '🟦' },
                   { id: 'star', label: 'Estrella', icon: '⭐' },
                   { id: 'pentagon', label: 'Pentágono', icon: '⬟' },
                   { id: 'hexagon', label: 'Hexágono', icon: '⬡' },
+                  { id: 'custom', label: 'Mi Forma', icon: '✨', disabled: !customRotorShape },
                 ].map(shape => (
                   <button
                     key={shape.id}
                     type="button"
+                    disabled={shape.disabled}
                     className={`btn ${epicycleShape === shape.id ? 'primary' : ''}`}
-                    style={{ padding: '6px 4px', fontSize: '0.72rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}
-                    onClick={() => setEpicycleShape && setEpicycleShape(shape.id)}
+                    style={{ padding: '6px 2px', fontSize: '0.68rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', opacity: shape.disabled ? 0.35 : 1 }}
+                    onClick={() => {
+                      if (shape.id === 'custom' && !customRotorShape) {
+                        setShowCustomModal(true);
+                      } else {
+                        setEpicycleShape && setEpicycleShape(shape.id);
+                      }
+                    }}
                   >
                     <span style={{ fontSize: '1rem' }}>{shape.icon}</span>
-                    <span>{shape.label}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{shape.label}</span>
                   </button>
                 ))}
               </div>
@@ -221,7 +250,7 @@ export default function Toolbar({
                         } else if (!session) {
                           onLoginClick();
                         } else {
-                          setActiveTab('project');
+                          if (setActiveTab) setActiveTab('project');
                           alert("Esta resolución (" + item.label + ") requiere suscripción Premium. ¡Desbloquéala en la pestaña Proyecto!");
                         }
                       }}
@@ -255,7 +284,7 @@ export default function Toolbar({
 
             <div className="control-group">
               <h3>Grabación de Video</h3>
-              <button className={`btn ${isRecording ? 'danger' : 'accent'} w-full`} onClick={onRecord}>
+              <button className={`btn ${isRecording ? 'danger' : 'accent'} w-full`} onClick={handleRecordClick}>
                 <Video size={18} />
                 {isRecording ? 'Detener Grabación' : `Grabar en ${exportQuality.toUpperCase()}`}
               </button>
@@ -331,7 +360,9 @@ export default function Toolbar({
               <button
                 key={tab.id}
                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (setActiveTab) setActiveTab(tab.id);
+                }}
                 title={tab.label}
               >
                 <Icon size={18} />
@@ -377,6 +408,18 @@ export default function Toolbar({
             {renderTabContent()}
           </div>
         </div>
+      )}
+
+      {/* CUSTOM ROTOR SHAPE DESIGNER MODAL */}
+      {showCustomModal && (
+        <CustomRotorModal
+          onClose={() => setShowCustomModal(false)}
+          currentCustomShape={customRotorShape}
+          onSaveCustomShape={(relativePoints) => {
+            if (setCustomRotorShape) setCustomRotorShape(relativePoints);
+            if (setEpicycleShape) setEpicycleShape('custom');
+          }}
+        />
       )}
 
       {/* INTERSTITIAL AD MODAL */}

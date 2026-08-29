@@ -7,6 +7,7 @@ export default function CanvasStage({
   width,
   height,
   mode,
+  activeTab = 'draw',
   bgImage,
   points,
   commitPoints,
@@ -23,7 +24,8 @@ export default function CanvasStage({
   pathThickness = 3,
   pointSize = 3,
   snapRadius = 15,
-  epicycleShape = 'circle'
+  epicycleShape = 'circle',
+  customRotorShape = null
 }) {
   const [image] = useImage(bgImage);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -40,12 +42,11 @@ export default function CanvasStage({
   // Arrow Keys Panning
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Allow panning when no input fields are focused
       if (document.activeElement.tagName === 'INPUT') return;
 
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
-        const step = 30; // pixels to pan
+        const step = 30;
         if (e.key === 'ArrowUp') setStageY(prev => prev + step);
         if (e.key === 'ArrowDown') setStageY(prev => prev - step);
         if (e.key === 'ArrowLeft') setStageX(prev => prev + step);
@@ -58,6 +59,7 @@ export default function CanvasStage({
 
   const getRelativePointerPosition = (stage) => {
     const pointerPosition = stage.getPointerPosition();
+    if (!pointerPosition) return { x: 0, y: 0 };
     const stageAttrs = stage.attrs;
     const x = (pointerPosition.x - (stageAttrs.x || 0)) / (stageAttrs.scaleX || 1);
     const y = (pointerPosition.y - (stageAttrs.y || 0)) / (stageAttrs.scaleY || 1);
@@ -77,12 +79,11 @@ export default function CanvasStage({
 
   const handleMouseDown = (e) => {
     if (isRecording) return;
+    // Si no estamos en la pestaña de dibujo, el lienzo sólo sirve para desplazar (pan)
+    if (activeTab !== 'draw' && mode !== 'moveOrigin') return;
+
     const stage = e.target.getStage();
     const rawPos = getRelativePointerPosition(stage);
-    
-    if (e.evt.button === 1) {
-       // Middle click pan placeholder
-    }
 
     if (e.target.className === 'Circle' && mode === 'edit') return; 
 
@@ -94,7 +95,7 @@ export default function CanvasStage({
       if (points.length > 0) {
         const lastPoint = points[points.length - 1];
         if (Math.hypot(lastPoint.x - pos.x, lastPoint.y - pos.y) < 1) {
-          return; // Avoid adding a consecutive duplicate point
+          return;
         }
       }
       commitPoints([...points, pos]);
@@ -102,7 +103,7 @@ export default function CanvasStage({
   };
 
   const handleMouseMove = (e) => {
-    if (isRecording || !isDrawing || mode !== 'draw-pencil') return;
+    if (isRecording || !isDrawing || mode !== 'draw-pencil' || activeTab !== 'draw') return;
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
     
@@ -142,7 +143,6 @@ export default function CanvasStage({
     };
 
     let newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-    
     if (newScale < 0.1) newScale = 0.1;
 
     setStageScale(newScale);
@@ -167,7 +167,7 @@ export default function CanvasStage({
   };
 
   const handlePointDragMove = (e, index) => {
-    if (mode === 'edit') {
+    if (mode === 'edit' && activeTab === 'draw') {
       const newPoints = [...displayPoints];
       newPoints[index] = {
         x: e.target.x(),
@@ -178,7 +178,7 @@ export default function CanvasStage({
   };
 
   const handlePointDragStart = (e, index) => {
-    if (mode === 'edit') {
+    if (mode === 'edit' && activeTab === 'draw') {
       setDraggedPointIndex(index);
     }
   };
@@ -191,10 +191,9 @@ export default function CanvasStage({
     }
   };
 
-  // Convert hex to rgba for strokes
   const hexToRgba = (hex, opacity) => {
     let r = 0, g = 0, b = 0;
-    if (hex.length === 7) {
+    if (hex && hex.length === 7) {
       r = parseInt(hex.substring(1, 3), 16);
       g = parseInt(hex.substring(3, 5), 16);
       b = parseInt(hex.substring(5, 7), 16);
@@ -205,6 +204,7 @@ export default function CanvasStage({
   const epicycleStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
   const epicycleLineStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
 
+  // Generador de Polígonos regulares
   const getPolygonPoints = (cx, cy, r, theta, sides) => {
     const pts = [];
     for (let k = 0; k < sides; k++) {
@@ -214,6 +214,7 @@ export default function CanvasStage({
     return pts;
   };
 
+  // Generador de Estrellas
   const getStarPoints = (cx, cy, r, theta, points = 5) => {
     const pts = [];
     const innerR = r * 0.42;
@@ -222,6 +223,55 @@ export default function CanvasStage({
       const currentR = k % 2 === 0 ? r : innerR;
       const angle = theta + k * step;
       pts.push(cx + currentR * Math.cos(angle), cy + currentR * Math.sin(angle));
+    }
+    return pts;
+  };
+
+  // Generador de Corazón (Muesca en el centro (cx, cy) y punta en el radio (cx + r*cos, cy + r*sin))
+  const getHeartPoints = (cx, cy, r, theta, samples = 25) => {
+    const pts = [];
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+    
+    // Lado derecho del corazón: de la muesca (0,0) a la punta (r,0)
+    const p0 = { u: 0, v: 0 };
+    const p1 = { u: -0.22 * r, v: 0.58 * r };
+    const p2 = { u: 0.45 * r, v: 0.68 * r };
+    const p3 = { u: r, v: 0 };
+    
+    for (let i = 0; i <= samples; i++) {
+      const t = i / samples;
+      const u = Math.pow(1 - t, 3) * p0.u + 3 * Math.pow(1 - t, 2) * t * p1.u + 3 * (1 - t) * Math.pow(t, 2) * p2.u + Math.pow(t, 3) * p3.u;
+      const v = Math.pow(1 - t, 3) * p0.v + 3 * Math.pow(1 - t, 2) * t * p1.v + 3 * (1 - t) * Math.pow(t, 2) * p2.v + Math.pow(t, 3) * p3.v;
+      pts.push(cx + u * cosT - v * sinT, cy + u * sinT + v * cosT);
+    }
+    
+    // Lado izquierdo del corazón: de la punta (r,0) de regreso a la muesca (0,0)
+    const q0 = { u: r, v: 0 };
+    const q1 = { u: 0.45 * r, v: -0.68 * r };
+    const q2 = { u: -0.22 * r, v: -0.58 * r };
+    const q3 = { u: 0, v: 0 };
+    
+    for (let i = 1; i <= samples; i++) {
+      const t = i / samples;
+      const u = Math.pow(1 - t, 3) * q0.u + 3 * Math.pow(1 - t, 2) * t * q1.u + 3 * (1 - t) * Math.pow(t, 2) * q2.u + Math.pow(t, 3) * q3.u;
+      const v = Math.pow(1 - t, 3) * q0.v + 3 * Math.pow(1 - t, 2) * t * q1.v + 3 * (1 - t) * Math.pow(t, 2) * q2.v + Math.pow(t, 3) * q3.v;
+      pts.push(cx + u * cosT - v * sinT, cy + u * sinT + v * cosT);
+    }
+    
+    return pts;
+  };
+
+  // Generador de Forma Libre personalizada
+  const getCustomShapePoints = (cx, cy, r, theta, relativePts) => {
+    if (!relativePts || relativePts.length === 0) return [];
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+    const pts = [];
+    for (let i = 0; i < relativePts.length; i++) {
+      const u = relativePts[i].u * r;
+      const v = relativePts[i].v * r;
+      pts.push(cx + u * cosT - v * sinT, cy + u * sinT + v * cosT);
     }
     return pts;
   };
@@ -273,6 +323,26 @@ export default function CanvasStage({
             listening={false}
           />
         );
+      } else if (epicycleShape === 'heart') {
+        shapeElement = (
+          <Line
+            points={getHeartPoints(prevX, prevY, radius, angle)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
+      } else if (epicycleShape === 'custom' && customRotorShape) {
+        shapeElement = (
+          <Line
+            points={getCustomShapePoints(prevX, prevY, radius, angle, customRotorShape)}
+            closed={true}
+            stroke={epicycleStroke}
+            strokeWidth={epicycleThickness}
+            listening={false}
+          />
+        );
       } else if (epicycleShape === 'pentagon') {
         shapeElement = (
           <Line
@@ -304,7 +374,7 @@ export default function CanvasStage({
           />
         );
       } else {
-        // Círculo tradicional por defecto
+        // Círculo tradicional
         shapeElement = (
           <Circle
             x={prevX}
@@ -342,6 +412,9 @@ export default function CanvasStage({
     );
   }
 
+  // Permitir arrastre del lienzo si estamos en modo pan o en otra pestaña que no sea dibujo
+  const isPanEnabled = mode === 'pan' || activeTab !== 'draw';
+
   return (
     <Stage
       width={width}
@@ -351,15 +424,15 @@ export default function CanvasStage({
       x={stageX}
       y={stageY}
       onWheel={handleWheel}
-      draggable={mode === 'pan'}
+      draggable={isPanEnabled}
       onDragEnd={handleStageDragEnd}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onTouchStart={(e) => {
-        e.evt.preventDefault();
         if (e.evt.touches.length === 2) {
+          e.evt.preventDefault();
           const touch1 = e.evt.touches[0];
           const touch2 = e.evt.touches[1];
           const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
@@ -369,8 +442,8 @@ export default function CanvasStage({
         }
       }}
       onTouchMove={(e) => {
-        e.evt.preventDefault();
         if (e.evt.touches.length === 2) {
+          e.evt.preventDefault();
           const touch1 = e.evt.touches[0];
           const touch2 = e.evt.touches[1];
           const dist = Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
@@ -387,11 +460,9 @@ export default function CanvasStage({
           let newScale = oldScale * scaleBy;
           if (newScale < 0.1) newScale = 0.1;
 
-          // Find the center of the pinch
           const clientX = (touch1.clientX + touch2.clientX) / 2;
           const clientY = (touch1.clientY + touch2.clientY) / 2;
           
-          // Get the pointer position relative to the stage container
           const rect = stage.container().getBoundingClientRect();
           const pointer = {
             x: clientX - rect.left,
@@ -442,7 +513,7 @@ export default function CanvasStage({
         )}
 
         {/* Edit Points (Control Points) and Snapping Zones */}
-        {!isRecording && (mode === 'edit' || mode.startsWith('draw')) && displayPoints.map((p, i) => (
+        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && displayPoints.map((p, i) => (
           <React.Fragment key={i}>
             {(mode === 'draw-line' || mode === 'draw-curve') && (
               <Circle
