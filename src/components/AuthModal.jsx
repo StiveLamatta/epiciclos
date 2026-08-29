@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { X, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 
+import { isNative } from '../services/platform';
+
 export default function AuthModal({ onClose, onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -21,7 +23,10 @@ export default function AuthModal({ onClose, onAuthSuccess }) {
           password,
         });
         if (error) throw error;
-        if (data?.user) onAuthSuccess(data.user);
+        if (data?.user) {
+          onAuthSuccess(data.user);
+          onClose();
+        }
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -29,7 +34,7 @@ export default function AuthModal({ onClose, onAuthSuccess }) {
         });
         if (error) throw error;
         if (data?.user) {
-          alert('¡Registro exitoso! Por favor, verifica tu correo electrónico.');
+          alert('¡Registro exitoso! Ya puedes iniciar sesión con tu correo.');
           setIsLogin(true);
         }
       }
@@ -45,7 +50,7 @@ export default function AuthModal({ onClose, onAuthSuccess }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: isNative() ? 'https://epy.stivesci.com' : window.location.origin,
         }
       });
       if (error) throw error;
