@@ -19,11 +19,13 @@
     "@supabase/supabase-js": "^2.110.0",
     "konva": "^10.3.0",
     "lucide-react": "^1.23.0",
+    "mp4-muxer": "^5.2.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-konva": "^19.2.5",
     "stripe": "^22.3.0",
-    "use-image": "^1.1.4"
+    "use-image": "^1.1.4",
+    "webm-muxer": "^5.1.4"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

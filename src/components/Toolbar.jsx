@@ -3,7 +3,7 @@ import {
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
-  Heart, Shapes, PlusCircle
+  Heart, Shapes, PlusCircle, Crop
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -30,7 +30,8 @@ export default function Toolbar({
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
   onSavePoints, onLoadPoints, onLoadProject,
   activeTab = 'draw', setActiveTab,
-  isDevUser, devPremiumToggle, onToggleDevPremium
+  isDevUser, devPremiumToggle, onToggleDevPremium,
+  onStartRenderVideo, isRenderingVideo, showRecordingBox, setShowRecordingBox
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
@@ -284,10 +285,41 @@ export default function Toolbar({
             </div>
 
             <div className="control-group">
-              <h3>Grabación de Video</h3>
-              <button className={`btn ${isRecording ? 'danger' : 'accent'} w-full`} onClick={handleRecordClick}>
+              <h3>Renderizado 60 FPS (Sin Lag)</h3>
+              <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: '0 0 10px 0', lineHeight: '1.35' }}>
+                Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano, recortando únicamente la zona del marco.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <button 
+                  type="button" 
+                  className={`btn ${showRecordingBox ? 'primary' : ''}`}
+                  style={{ flex: 1, padding: '8px', fontSize: '0.75rem' }}
+                  onClick={() => setShowRecordingBox && setShowRecordingBox(prev => !prev)}
+                >
+                  <Crop size={14} /> {showRecordingBox ? 'Ocultar Marco' : 'Ajustar Marco'}
+                </button>
+              </div>
+
+              <button 
+                type="button"
+                className={`btn ${isRenderingVideo ? 'danger' : 'accent'} w-full`}
+                style={{ fontWeight: 'bold', padding: '10px' }}
+                onClick={() => {
+                  setMobileSheetOpen(false);
+                  if (onStartRenderVideo) onStartRenderVideo();
+                }}
+              >
+                <Sparkles size={16} />
+                {isRenderingVideo ? 'Cancelar Renderizado' : `Renderizar Video 60 FPS (${exportQuality.toUpperCase()})`}
+              </button>
+            </div>
+
+            <div className="control-group">
+              <h3>Grabación en Tiempo Real</h3>
+              <button className={`btn ${isRecording ? 'danger' : ''} w-full`} onClick={handleRecordClick}>
                 <Video size={18} />
-                {isRecording ? 'Detener Grabación' : `Grabar en ${exportQuality.toUpperCase()}`}
+                {isRecording ? 'Detener Grabación' : `Grabar Pantalla`}
               </button>
               
               {(recordingUrl || recordingMp4Url) && (

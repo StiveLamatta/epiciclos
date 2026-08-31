@@ -23,10 +23,11 @@ export default function TopQuickbar({
   showRecordingBox,
   setShowRecordingBox,
   isRenderingVideo,
-  onStartRenderVideo
+  onStartRenderVideo,
+  topOffset = 8
 }) {
   return (
-    <div className="top-quickbar-container">
+    <div className="top-quickbar-container" style={{ '--quickbar-top': `${topOffset}px` }}>
       <div className="top-quickbar glass-panel">
         {/* Herramientas de dibujo */}
         <button

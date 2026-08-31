@@ -440,7 +440,7 @@ input[type="color"]::-webkit-color-swatch {
    ============================================ */
 .top-quickbar-container {
   position: fixed;
-  top: 8px;
+  top: var(--quickbar-top, 8px);
   left: 0;
   right: 0;
   z-index: 100;
@@ -448,6 +448,7 @@ input[type="color"]::-webkit-color-swatch {
   justify-content: center;
   pointer-events: none;
   padding: 0 8px;
+  transition: top 0.2s ease;
 }
 
 .top-quickbar {

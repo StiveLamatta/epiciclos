@@ -484,6 +484,7 @@ function App() {
         setShowRecordingBox={setShowRecordingBox}
         isRenderingVideo={isRenderingVideo}
         onStartRenderVideo={handleStartRenderVideo}
+        topOffset={isNative() && !effectivePremium ? 64 : 8}
       />
 
       <div className="canvas-area">
@@ -624,6 +625,10 @@ function App() {
         canRedo={historyIndex < pointsHistory.length - 1}
         onSavePoints={handleSavePoints}
         onLoadPoints={handleLoadPoints}
+        onStartRenderVideo={handleStartRenderVideo}
+        isRenderingVideo={isRenderingVideo}
+        showRecordingBox={showRecordingBox}
+        setShowRecordingBox={setShowRecordingBox}
       />
       
       {showAuth && (
