@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   PenTool, Minus, Spline, MousePointer2, Move, Crosshair, 
   Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw, 
-  Play, Square, Video, Trash2, Plus, Eye, EyeOff, CircleDot
+  Play, Square, Video, Trash2, Plus, Eye, EyeOff, CircleDot,
+  Eraser
 } from 'lucide-react';
 
 export default function TopQuickbar({
@@ -32,6 +33,7 @@ export default function TopQuickbar({
   showEpicyclesPreview,
   onToggleEpicyclesPreview,
   onToggleClosePath,
+  onClearPaths,
   topOffset = 8
 }) {
   const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
@@ -212,7 +214,7 @@ export default function TopQuickbar({
 
         <div className="quickbar-divider" />
 
-        {/* Animación y Video */}
+        {/* Animación, Limpiar Estela y Video */}
         <button
           className={`quick-btn ${isAnimating ? 'danger' : 'primary'}`}
           onClick={onToggleAnimation}
@@ -220,6 +222,15 @@ export default function TopQuickbar({
         >
           {isAnimating ? <Square size={16} /> : <Play size={16} />}
           <span>{isAnimating ? 'Pausa' : 'Play'}</span>
+        </button>
+
+        <button
+          className="quick-btn"
+          onClick={onClearPaths}
+          title="Borrar Estela / Camino Trazado sin borrar los puntos"
+        >
+          <Eraser size={16} />
+          <span>Estela</span>
         </button>
 
         <button

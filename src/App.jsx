@@ -227,6 +227,12 @@ function App() {
     commitLayers(nextLayers);
   };
 
+  // Limpiar solo la estela / caminos trazados de la simulación
+  const handleClearPaths = () => {
+    setLayerPaths({});
+    setTime(0);
+  };
+
   // CÁLCULO EXACTO DE FOURIER, ORDENAMIENTO Y PARTICIÓN PROPORCIONAL
   const computedLayers = useMemo(() => {
     return layers.map(layer => {
@@ -256,7 +262,7 @@ function App() {
 
       const rawFourier = complexSignal.length > 1 ? dft(complexSignal) : [];
 
-      // Aplicar ordenamiento (mayor a menor) y partición proporcional
+      // Aplicar partición proporcional y reordenar todos los radios resultantes de mayor a menor
       const fourier = processFourierEpicycles(rawFourier, {
         sortDesc: layer.sortDesc !== false,
         splitCount: layer.splitCount || 0,
@@ -530,6 +536,7 @@ function App() {
         showEpicyclesPreview={showEpicyclesPreview}
         onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
         onToggleClosePath={handleToggleClosePath}
+        onClearPaths={handleClearPaths}
         topOffset={isNative() && !effectivePremium ? 64 : 8}
       />
 
@@ -662,6 +669,7 @@ function App() {
         showEpicyclesPreview={showEpicyclesPreview}
         onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
         onToggleClosePath={handleToggleClosePath}
+        onClearPaths={handleClearPaths}
       />
       
       {showAuth && (

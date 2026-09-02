@@ -402,9 +402,35 @@ const CanvasStage = forwardRef(function CanvasStage({
           );
         })}
 
-        {/* Puntos de edición y anillos de radio de imantación */}
+        {/* Puntos de edición con ALUMBRADO ESPECIAL del PRIMER y ÚLTIMO punto */}
         {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => {
           const isFirstPoint = i === 0;
+          const isLastPoint = i === currentPoints.length - 1 && currentPoints.length > 1;
+
+          let ptFill = p.isCurve ? "#a855f7" : "#f59e0b";
+          let ptRadius = pointSize;
+          let ptShadowColor = "transparent";
+          let ptShadowBlur = 0;
+
+          if (isFirstPoint) {
+            ptFill = "#38bdf8"; // Azul celeste brillante para el inicio
+            ptRadius = pointSize + 4;
+            ptShadowColor = "#38bdf8";
+            ptShadowBlur = 14;
+          } else if (isLastPoint) {
+            ptFill = "#10b981"; // Verde esmeralda brillante para el punto activo final
+            ptRadius = pointSize + 5;
+            ptShadowColor = "#10b981";
+            ptShadowBlur = 18;
+          }
+
+          if (draggedPointIndex === i) {
+            ptFill = "#ffffff";
+            ptRadius = pointSize + 6;
+            ptShadowColor = "#38bdf8";
+            ptShadowBlur = 16;
+          }
+
           return (
             <React.Fragment key={`pt-${i}`}>
               {snapRadius > 0 && (
@@ -412,7 +438,7 @@ const CanvasStage = forwardRef(function CanvasStage({
                   x={p.x}
                   y={p.y}
                   radius={snapRadius}
-                  stroke={isFirstPoint ? "rgba(56, 189, 248, 0.6)" : "rgba(16, 185, 129, 0.4)"}
+                  stroke={isFirstPoint ? "rgba(56, 189, 248, 0.6)" : (isLastPoint ? "rgba(16, 185, 129, 0.6)" : "rgba(255, 255, 255, 0.25)")}
                   strokeWidth={1 / stageScale}
                   dash={[3 / stageScale, 3 / stageScale]}
                   listening={false}
@@ -421,12 +447,12 @@ const CanvasStage = forwardRef(function CanvasStage({
               <Circle
                 x={p.x}
                 y={p.y}
-                radius={(draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)) / stageScale}
-                fill={draggedPointIndex === i ? "#fff" : (isFirstPoint ? "#38bdf8" : (p.isCurve ? "#a855f7" : "#f59e0b"))}
+                radius={ptRadius / stageScale}
+                fill={ptFill}
                 stroke="#ffffff"
-                strokeWidth={1 / stageScale}
-                shadowColor={draggedPointIndex === i ? "#38bdf8" : "transparent"}
-                shadowBlur={draggedPointIndex === i ? 10 : 0}
+                strokeWidth={(isFirstPoint || isLastPoint ? 2 : 1) / stageScale}
+                shadowColor={ptShadowColor}
+                shadowBlur={ptShadowBlur}
                 draggable={mode === 'edit'}
                 onDragStart={(e) => handlePointDragStart(e, i)}
                 onDragMove={(e) => handlePointDragMove(e, i)}
@@ -454,7 +480,6 @@ const CanvasStage = forwardRef(function CanvasStage({
 
           const epicycleElements = [];
 
-          // Solo renderizar la cadena de epiciclos si la simulación está activa, en vista previa o moviendo el centro
           if (shouldRenderEpicycles && fList && fList.length > 0) {
             let x = lOrigin.x;
             let y = lOrigin.y;

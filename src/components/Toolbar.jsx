@@ -4,7 +4,7 @@ import {
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
   Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet, CircleDot,
-  Sliders, ArrowDownNarrowWide, Split
+  Sliders, ArrowDownNarrowWide, Split, Eraser
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -42,7 +42,8 @@ export default function Toolbar({
   activeTab = 'draw', setActiveTab,
   isDevUser, devPremiumToggle, onToggleDevPremium,
   onStartRenderVideo, isRenderingVideo, showRecordingBox, setShowRecordingBox,
-  showEpicyclesPreview, onToggleEpicyclesPreview, onToggleClosePath
+  showEpicyclesPreview, onToggleEpicyclesPreview, onToggleClosePath,
+  onClearPaths
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
@@ -165,7 +166,7 @@ export default function Toolbar({
                 onChange={(e) => setSnapRadius(parseInt(e.target.value))} 
               />
               <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
-                Al tocar cerca del primer punto o de otro punto, se unirá magnéticamente.
+                Al tocar cerca del punto azul (inicio) o de otro punto, se unirá magnéticamente.
               </p>
             </div>
 
@@ -317,18 +318,30 @@ export default function Toolbar({
                 disabled={activeFourierLength === 0}
               />
 
-              {/* Ordenar de mayor a menor */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '6px', fontSize: '0.78rem', color: '#cbd5e1' }}>
-                <input 
-                  type="checkbox" 
-                  checked={activeLayer.sortDesc !== false}
-                  onChange={(e) => onUpdateLayer(activeLayer.id, { sortDesc: e.target.checked })}
-                  style={{ accentColor: '#38bdf8', width: '16px', height: '16px' }}
-                />
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <ArrowDownNarrowWide size={14} color="#38bdf8" /> Ordenar de mayor a menor radio
-                </span>
-              </label>
+              {/* Botón Luminoso Verde para Ordenar Radios */}
+              <button
+                type="button"
+                className="btn w-full"
+                style={{
+                  marginTop: '8px',
+                  padding: '9px 12px',
+                  fontSize: '0.78rem',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  background: activeLayer.sortDesc !== false ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                  border: `1px solid ${activeLayer.sortDesc !== false ? '#10b981' : 'rgba(255, 255, 255, 0.12)'}`,
+                  color: activeLayer.sortDesc !== false ? '#34d399' : '#cbd5e1',
+                  boxShadow: activeLayer.sortDesc !== false ? '0 0 14px rgba(16, 185, 129, 0.45)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={() => onUpdateLayer(activeLayer.id, { sortDesc: activeLayer.sortDesc === false ? true : false })}
+              >
+                <ArrowDownNarrowWide size={16} />
+                {activeLayer.sortDesc !== false ? '✓ Radios Ordenados: Mayor a Menor' : 'Ordenar Radios de Mayor a Menor'}
+              </button>
             </div>
           </div>
         );
@@ -446,14 +459,27 @@ export default function Toolbar({
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <button 
-                className={`btn ${isAnimating ? 'danger' : 'primary'} w-full`} 
-                style={{ padding: '12px', fontSize: '0.88rem', fontWeight: 'bold' }}
-                onClick={onToggleAnimation}
-              >
-                {isAnimating ? <Square size={16} /> : <Play size={16} />}
-                {isAnimating ? 'Pausar Simulación' : 'Iniciar Simulación'}
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button 
+                  className={`btn ${isAnimating ? 'danger' : 'primary'}`} 
+                  style={{ flex: 1, padding: '12px', fontSize: '0.88rem', fontWeight: 'bold' }}
+                  onClick={onToggleAnimation}
+                >
+                  {isAnimating ? <Square size={16} /> : <Play size={16} />}
+                  {isAnimating ? 'Pausar' : 'Iniciar'}
+                </button>
+
+                {/* Botón de Borrar Camino Trazado */}
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ padding: '12px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  onClick={onClearPaths}
+                  title="Borrar Estela / Camino Trazado"
+                >
+                  <Eraser size={16} /> Limpiar Estela
+                </button>
+              </div>
             </div>
 
             <div className="control-group">
@@ -490,18 +516,30 @@ export default function Toolbar({
                 disabled={activeFourierLength === 0}
               />
 
-              {/* Ordenar de mayor a menor */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '6px', fontSize: '0.78rem', color: '#cbd5e1' }}>
-                <input 
-                  type="checkbox" 
-                  checked={activeLayer.sortDesc !== false}
-                  onChange={(e) => onUpdateLayer(activeLayer.id, { sortDesc: e.target.checked })}
-                  style={{ accentColor: '#38bdf8', width: '16px', height: '16px' }}
-                />
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <ArrowDownNarrowWide size={14} color="#38bdf8" /> Ordenar epiciclos de mayor a menor radio
-                </span>
-              </label>
+              {/* Botón Luminoso Verde para Ordenar Radios */}
+              <button
+                type="button"
+                className="btn w-full"
+                style={{
+                  marginTop: '8px',
+                  padding: '9px 12px',
+                  fontSize: '0.78rem',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  background: activeLayer.sortDesc !== false ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                  border: `1px solid ${activeLayer.sortDesc !== false ? '#10b981' : 'rgba(255, 255, 255, 0.12)'}`,
+                  color: activeLayer.sortDesc !== false ? '#34d399' : '#cbd5e1',
+                  boxShadow: activeLayer.sortDesc !== false ? '0 0 14px rgba(16, 185, 129, 0.45)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                onClick={() => onUpdateLayer(activeLayer.id, { sortDesc: activeLayer.sortDesc === false ? true : false })}
+              >
+                <ArrowDownNarrowWide size={16} />
+                {activeLayer.sortDesc !== false ? '✓ Radios Ordenados: Mayor a Menor' : 'Ordenar Radios de Mayor a Menor'}
+              </button>
             </div>
 
             {/* PARTICIÓN PROPORCIONAL DE LOS N PRIMEROS EPICICLOS */}
@@ -517,13 +555,13 @@ export default function Toolbar({
               <input 
                 type="range" 
                 min="0" 
-                max="10" 
+                max={Math.max(1, activeFourierLength)} 
                 step="1" 
                 value={activeLayer.splitCount || 0}
                 onChange={(e) => onUpdateLayer(activeLayer.id, { splitCount: parseInt(e.target.value) })}
               />
               <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 6px 0' }}>
-                Divide los círculos grandes en sub-círculos proporcionales articulados.
+                Divide los radios grandes en sub-círculos proporcionales articulados.
               </p>
 
               {activeLayer.splitCount > 0 && (

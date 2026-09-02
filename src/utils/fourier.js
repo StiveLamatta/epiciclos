@@ -33,8 +33,9 @@ export function dft(x) {
 
 /**
  * Procesa la lista de componentes de Fourier:
- * 1. Ordena los epiciclos (de mayor a menor radio o por frecuencia natural).
- * 2. Descompone/parte los primeros N epiciclos siguiendo una secuencia proporcional elegible (ej. 3, 2, 1).
+ * 1. Descompone los primeros N epiciclos siguiendo una secuencia proporcional (3k, 2k, 1k...).
+ * 2. Si sortDesc está activo, reordena TODOS los radios resultantes (incluyendo los nuevos sub-radios)
+ *    de mayor a menor de forma global.
  */
 export function processFourierEpicycles(fourierList, {
   sortDesc = true,
@@ -45,14 +46,8 @@ export function processFourierEpicycles(fourierList, {
 
   let list = [...fourierList];
 
-  // 1. Ordenamiento
-  if (sortDesc) {
-    list.sort((a, b) => b.amp - a.amp);
-  } else {
-    list.sort((a, b) => Math.abs(a.freq) - Math.abs(b.freq));
-  }
-
-  // 2. Partición proporcional de los N primeros epiciclos
+  // 1. Partición proporcional de los N primeros epiciclos
+  let expandedList = [];
   if (splitCount > 0) {
     const rawWeights = String(splitSequence)
       .split(/[,;\s]+/)
@@ -62,7 +57,6 @@ export function processFourierEpicycles(fourierList, {
     const weights = rawWeights.length > 0 ? rawWeights : [3, 2, 1];
     const totalWeight = weights.reduce((acc, w) => acc + w, 0);
 
-    const result = [];
     const countToSplit = Math.min(splitCount, list.length);
 
     for (let i = 0; i < list.length; i++) {
@@ -70,7 +64,7 @@ export function processFourierEpicycles(fourierList, {
       if (i < countToSplit && totalWeight > 0) {
         for (let j = 0; j < weights.length; j++) {
           const ratio = weights[j] / totalWeight;
-          result.push({
+          expandedList.push({
             ...epi,
             amp: epi.amp * ratio,
             re: epi.re * ratio,
@@ -81,11 +75,19 @@ export function processFourierEpicycles(fourierList, {
           });
         }
       } else {
-        result.push(epi);
+        expandedList.push(epi);
       }
     }
-    return result;
+  } else {
+    expandedList = list;
   }
 
-  return list;
+  // 2. Ordenar TODOS los radios resultantes (originales + sub-radios)
+  if (sortDesc) {
+    expandedList.sort((a, b) => b.amp - a.amp);
+  } else {
+    expandedList.sort((a, b) => Math.abs(a.freq) - Math.abs(b.freq));
+  }
+
+  return expandedList;
 }
