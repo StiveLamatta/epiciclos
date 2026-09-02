@@ -2,9 +2,9 @@ import * as Mp4Muxer from 'mp4-muxer';
 import * as WebmMuxer from 'webm-muxer';
 
 /**
- * Motor de Renderizado Offline Determinista a 60 FPS.
+ * Motor de Renderizado Offline Determinista a 60 FPS con soporte Multicapa.
  * Renderiza frame a frame de forma discreta usando WebCodecs (VideoEncoder) + MP4/WebM Muxer.
- * Garantiza 60 FPS EXACTOS y PERFECTOS sin importar la velocidad de la CPU ni caídas de frames.
+ * Dibuja simultáneamente múltiples trazas/cadenas de epiciclos con 60 FPS EXACTOS.
  */
 
 function drawPolygon(ctx, cx, cy, r, theta, sides) {
@@ -92,12 +92,13 @@ function drawCustomShape(ctx, cx, cy, r, theta, relativePts) {
 }
 
 export async function renderFourierVideoOffline({
-  fourier,
-  origin,
+  layers = [],
+  fourier = null, // fallback legacy
+  origin = null,
   epicycleShape = 'circle',
   customRotorShape = null,
   epicycleColor = '#3b82f6',
-  pathColor = '#3b82f6',
+  pathColor = '#38bdf8',
   epicycleThickness = 1.5,
   pathThickness = 3.5,
   exportQuality = '1080p',
@@ -106,8 +107,25 @@ export async function renderFourierVideoOffline({
   fps = 60,
   onProgress = () => {}
 }) {
-  if (!fourier || fourier.length === 0) {
-    throw new Error('No hay coeficientes de Fourier para renderizar.');
+  // Normalizar lista de capas
+  let activeLayers = [];
+  if (layers && layers.length > 0) {
+    activeLayers = layers.filter(l => l.visible !== false && (l.effectiveFourier?.length > 0 || l.fourier?.length > 0));
+  } else if (fourier && fourier.length > 0) {
+    activeLayers = [{
+      effectiveFourier: fourier,
+      origin: origin || { x: 0, y: 0 },
+      epicycleShape,
+      customRotorShape,
+      epicycleColor,
+      pathColor,
+      epicycleThickness,
+      pathThickness
+    }];
+  }
+
+  if (activeLayers.length === 0) {
+    throw new Error('No hay trazos con coeficientes de Fourier para renderizar.');
   }
 
   // Dimensiones según calidad seleccionada (múltiplos pares para codecs H.264/VP9)
@@ -128,25 +146,31 @@ export async function renderFourierVideoOffline({
   canvas.height = outHeight;
   const ctx = canvas.getContext('2d', { alpha: false });
 
-  // Calcular encuadre si no hay recordingBox definido
+  // Calcular encuadre conjunto si no hay recordingBox definido
   let box = recordingBox;
   if (!box || !box.width || !box.height) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (let k = 0; k <= 200; k++) {
-      const t = (k / 200) * Math.PI * 2;
-      let x = origin.x;
-      let y = origin.y;
-      for (let i = 0; i < fourier.length; i++) {
-        x += fourier[i].amp * Math.cos(fourier[i].freq * t + fourier[i].phase);
-        y += fourier[i].amp * Math.sin(fourier[i].freq * t + fourier[i].phase);
+    
+    for (const layer of activeLayers) {
+      const fList = layer.effectiveFourier || layer.fourier;
+      const lOrigin = layer.origin || { x: 0, y: 0 };
+      for (let k = 0; k <= 100; k++) {
+        const t = (k / 100) * Math.PI * 2;
+        let x = lOrigin.x;
+        let y = lOrigin.y;
+        for (let i = 0; i < fList.length; i++) {
+          x += fList[i].amp * Math.cos(fList[i].freq * t + fList[i].phase);
+          y += fList[i].amp * Math.sin(fList[i].freq * t + fList[i].phase);
+        }
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
       }
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
     }
-    const padding = 50;
-    const size = Math.max(maxX - minX, maxY - minY) + padding * 2;
+
+    const padding = 60;
+    const size = Math.max(maxX - minX, maxY - minY, 100) + padding * 2;
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
     box = {
@@ -158,13 +182,15 @@ export async function renderFourierVideoOffline({
   }
 
   const scale = outWidth / box.width;
-  const pathHistory = [];
+  
+  // Historial de caminos para cada capa
+  const layerPaths = activeLayers.map(() => []);
 
-  // Función de renderizado de 1 frame individual a canvas
+  // Función de renderizado de 1 frame individual a canvas con todas las capas
   const renderFrameToCanvas = (frameIdx) => {
     const t = (frameIdx / totalFrames) * Math.PI * 2;
 
-    // 1. Fondo negro espacial
+    // 1. Fondo espacial negro profundo
     ctx.fillStyle = '#0a0d14';
     ctx.fillRect(0, 0, outWidth, outHeight);
 
@@ -172,72 +198,87 @@ export async function renderFourierVideoOffline({
     ctx.scale(scale, scale);
     ctx.translate(-box.x, -box.y);
 
-    let x = origin.x;
-    let y = origin.y;
+    // 2. Renderizar cada capa
+    activeLayers.forEach((layer, layerIdx) => {
+      const fList = layer.effectiveFourier || layer.fourier;
+      if (!fList || fList.length === 0) return;
 
-    for (let i = 0; i < fourier.length; i++) {
-      const prevX = x;
-      const prevY = y;
-      const freq = fourier[i].freq;
-      const radius = fourier[i].amp;
-      const phase = fourier[i].phase;
-      const angle = freq * t + phase;
+      const lOrigin = layer.origin || { x: 0, y: 0 };
+      const lShape = layer.epicycleShape || 'circle';
+      const lCustom = layer.customRotorShape || null;
+      const lEpicycleColor = layer.epicycleColor || '#3b82f6';
+      const lPathColor = layer.pathColor || '#38bdf8';
+      const lEpicycleThick = layer.epicycleThickness || 1.5;
+      const lPathThick = layer.pathThickness || 3.5;
 
-      x += radius * Math.cos(angle);
-      y += radius * Math.sin(angle);
+      let x = lOrigin.x;
+      let y = lOrigin.y;
 
-      ctx.strokeStyle = epicycleColor;
-      ctx.lineWidth = epicycleThickness;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      for (let i = 0; i < fList.length; i++) {
+        const prevX = x;
+        const prevY = y;
+        const freq = fList[i].freq;
+        const radius = fList[i].amp;
+        const phase = fList[i].phase;
+        const angle = freq * t + phase;
 
-      if (epicycleShape === 'triangle') {
-        drawPolygon(ctx, prevX, prevY, radius, angle, 3);
-      } else if (epicycleShape === 'square') {
-        drawPolygon(ctx, prevX, prevY, radius, angle, 4);
-      } else if (epicycleShape === 'heart') {
-        drawHeart(ctx, prevX, prevY, radius, angle);
-      } else if (epicycleShape === 'custom' && customRotorShape) {
-        drawCustomShape(ctx, prevX, prevY, radius, angle, customRotorShape);
-      } else if (epicycleShape === 'pentagon') {
-        drawPolygon(ctx, prevX, prevY, radius, angle, 5);
-      } else if (epicycleShape === 'hexagon') {
-        drawPolygon(ctx, prevX, prevY, radius, angle, 6);
-      } else if (epicycleShape === 'star') {
-        drawStar(ctx, prevX, prevY, radius, angle, 5);
-      } else {
+        x += radius * Math.cos(angle);
+        y += radius * Math.sin(angle);
+
+        ctx.strokeStyle = lEpicycleColor;
+        ctx.lineWidth = lEpicycleThick;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (lShape === 'triangle') {
+          drawPolygon(ctx, prevX, prevY, radius, angle, 3);
+        } else if (lShape === 'square') {
+          drawPolygon(ctx, prevX, prevY, radius, angle, 4);
+        } else if (lShape === 'heart') {
+          drawHeart(ctx, prevX, prevY, radius, angle);
+        } else if (lShape === 'custom' && lCustom) {
+          drawCustomShape(ctx, prevX, prevY, radius, angle, lCustom);
+        } else if (lShape === 'pentagon') {
+          drawPolygon(ctx, prevX, prevY, radius, angle, 5);
+        } else if (lShape === 'hexagon') {
+          drawPolygon(ctx, prevX, prevY, radius, angle, 6);
+        } else if (lShape === 'star') {
+          drawStar(ctx, prevX, prevY, radius, angle, 5);
+        } else {
+          ctx.beginPath();
+          ctx.arc(prevX, prevY, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
         ctx.beginPath();
-        ctx.arc(prevX, prevY, radius, 0, Math.PI * 2);
+        ctx.moveTo(prevX, prevY);
+        ctx.lineTo(x, y);
         ctx.stroke();
       }
 
-      ctx.beginPath();
-      ctx.moveTo(prevX, prevY);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
+      layerPaths[layerIdx].push({ x, y });
 
-    pathHistory.push({ x, y });
-
-    // Estela continua trazada
-    if (pathHistory.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = pathColor;
-      ctx.lineWidth = pathThickness;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(pathHistory[0].x, pathHistory[0].y);
-      for (let p = 1; p < pathHistory.length; p++) {
-        ctx.lineTo(pathHistory[p].x, pathHistory[p].y);
+      // Trazado continuo acumulado de esta capa
+      const history = layerPaths[layerIdx];
+      if (history.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = lPathColor;
+        ctx.lineWidth = lPathThick;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(history[0].x, history[0].y);
+        for (let p = 1; p < history.length; p++) {
+          ctx.lineTo(history[p].x, history[p].y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-    }
 
-    // Punta trazadora luminosa
-    ctx.beginPath();
-    ctx.arc(x, y, pathThickness * 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = pathColor;
-    ctx.fill();
+      // Punta luminosa de trazado
+      ctx.beginPath();
+      ctx.arc(x, y, lPathThick * 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = lPathColor;
+      ctx.fill();
+    });
 
     ctx.restore();
   };
@@ -247,7 +288,7 @@ export async function renderFourierVideoOffline({
   // =========================================================================
   if (typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined') {
     try {
-      console.log('[VideoRenderer] Usando WebCodecs + MP4 Muxer para 60 FPS determinista');
+      console.log('[VideoRenderer] Renderizando multicapa con WebCodecs + MP4 Muxer (60 FPS)');
       
       const muxer = new Mp4Muxer.Muxer({
         target: new Mp4Muxer.ArrayBufferTarget(),
@@ -335,7 +376,7 @@ export async function renderFourierVideoOffline({
           framerate: fps
         });
 
-        pathHistory.length = 0;
+        layerPaths.forEach(lp => lp.length = 0);
         const frameDurationUs = Math.round(1000000 / fps);
 
         for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
@@ -374,8 +415,8 @@ export async function renderFourierVideoOffline({
   // =========================================================================
   // FALLBACK: MediaRecorder Pacing a 60 FPS
   // =========================================================================
-  console.log('[VideoRenderer] Usando fallback MediaRecorder');
-  pathHistory.length = 0;
+  console.log('[VideoRenderer] Usando fallback MediaRecorder multicapa');
+  layerPaths.forEach(lp => lp.length = 0);
 
   const stream = canvas.captureStream(fps);
   const recorder = new MediaRecorder(stream, {
@@ -397,7 +438,7 @@ export async function renderFourierVideoOffline({
 
   recorder.start();
 
-  const frameIntervalMs = 1000 / fps; // 16.66ms por frame
+  const frameIntervalMs = 1000 / fps;
   for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
     const frameStart = performance.now();
     renderFrameToCanvas(frameIdx);

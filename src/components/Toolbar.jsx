@@ -3,7 +3,7 @@ import {
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
-  Heart, Shapes, PlusCircle, Crop
+  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -11,20 +11,21 @@ import CustomRotorModal from './CustomRotorModal';
 import { downloadOrShareVideo } from '../services/downloader';
 
 const TABS = [
-  { id: 'draw',      label: 'Dibujo',    icon: Pencil },
+  { id: 'draw',      label: 'Dibujo',     icon: Pencil },
+  { id: 'layers',    label: 'Trazas',     icon: Layers },
   { id: 'style',     label: 'Apariencia', icon: Brush },
   { id: 'animate',   label: 'Animación',  icon: Sparkles },
-  { id: 'project',   label: 'Proyecto',   icon: Layers },
+  { id: 'project',   label: 'Proyecto',   icon: FolderOpen },
 ];
 
 export default function Toolbar({
-  isPremium, session, onLoginClick, onLogout, currentPoints,
+  isPremium, session, onLoginClick, onLogout,
+  layers = [], activeLayerId, setActiveLayerId,
+  onAddLayer, onDeleteLayer, onUpdateLayer,
   mode, setMode, onImageUpload, onClear, onToggleAnimation, isAnimating,
-  animationSpeed, setAnimationSpeed, epicycleColor, setEpicycleColor,
-  pathColor, setPathColor, epicycleThickness, setEpicycleThickness,
-  pathThickness, setPathThickness, pathScale, setPathScale, pointSize, setPointSize,
+  animationSpeed, setAnimationSpeed,
+  pathScale, setPathScale, pointSize, setPointSize,
   snapRadius, setSnapRadius,
-  epicycleShape = 'circle', setEpicycleShape,
   customRotorShape, setCustomRotorShape,
   exportQuality = '480p', setExportQuality,
   onRecord, isRecording, recordingUrl, recordingMp4Url, onUndo, onRedo, canUndo, canRedo,
@@ -36,6 +37,10 @@ export default function Toolbar({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
   const [showCustomModal, setShowCustomModal] = useState(false);
+
+  // Capa activa
+  const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
+  const activeFourierLength = activeLayer.fourier?.length || 0;
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -78,7 +83,7 @@ export default function Toolbar({
   };
 
   const handleRecordClick = () => {
-    setMobileSheetOpen(false); // Minimiza el menú de opciones para no tapar la grabación
+    setMobileSheetOpen(false);
     onRecord();
   };
 
@@ -88,15 +93,42 @@ export default function Toolbar({
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <h3>Trazado</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0 }}>Modo de Trazo ({activeLayer.name || 'Trazo 1'})</h3>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                  {activeLayer.points?.length || 0} pts
+                </span>
+              </div>
+              
               <div className="button-row">
-                <button className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} onClick={() => setMode('draw-pencil')} title="Lápiz Libre">
+                <button 
+                  className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} 
+                  onClick={() => {
+                    setMode('draw-pencil');
+                    onUpdateLayer(activeLayer.id, { drawType: 'pencil' });
+                  }} 
+                  title="Lápiz Libre"
+                >
                   <PenTool size={18} />
                 </button>
-                <button className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} onClick={() => setMode('draw-line')} title="Línea Recta">
+                <button 
+                  className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} 
+                  onClick={() => {
+                    setMode('draw-line');
+                    onUpdateLayer(activeLayer.id, { drawType: 'line' });
+                  }} 
+                  title="Línea Recta"
+                >
                   <Minus size={18} />
                 </button>
-                <button className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} onClick={() => setMode('draw-curve')} title="Curva Suave">
+                <button 
+                  className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} 
+                  onClick={() => {
+                    setMode('draw-curve');
+                    onUpdateLayer(activeLayer.id, { drawType: 'curve' });
+                  }} 
+                  title="Curva Suave (Spline)"
+                >
                   <Spline size={18} />
                 </button>
               </div>
@@ -130,88 +162,218 @@ export default function Toolbar({
           </div>
         );
 
+      case 'layers':
+        return (
+          <div className="toolbar-sections">
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>Trazas / Capas ({layers.length})</h3>
+                <button 
+                  type="button" 
+                  className="btn primary" 
+                  style={{ padding: '5px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  onClick={onAddLayer}
+                >
+                  <Plus size={14} /> Nueva Traza
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                {layers.map((layer, idx) => {
+                  const isActive = layer.id === activeLayer.id;
+                  return (
+                    <div 
+                      key={layer.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        background: isActive ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                        border: `1px solid ${isActive ? '#38bdf8' : 'rgba(255, 255, 255, 0.08)'}`,
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setActiveLayerId(layer.id)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <div 
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%',
+                            background: layer.pathColor || '#38bdf8'
+                          }} 
+                        />
+                        <span style={{ fontSize: '0.82rem', fontWeight: isActive ? 'bold' : 'normal', color: isActive ? '#38bdf8' : '#f1f5f9' }}>
+                          {layer.name || `Trazo ${idx + 1}`}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>
+                          {layer.drawType === 'curve' ? '〰️ Curva' : (layer.drawType === 'line' ? '➖ Recta' : '✏️ Lápiz')}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                          {layer.points?.length || 0} pts
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <button
+                          type="button"
+                          className="btn icon-btn"
+                          style={{ padding: '4px', width: '28px', height: '28px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateLayer(layer.id, { visible: !layer.visible });
+                          }}
+                          title={layer.visible ? 'Ocultar' : 'Mostrar'}
+                        >
+                          {layer.visible ? <Eye size={14} /> : <EyeOff size={14} color="#64748b" />}
+                        </button>
+                        {layers.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn icon-btn danger"
+                            style={{ padding: '4px', width: '28px', height: '28px' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteLayer(layer.id);
+                            }}
+                            title="Eliminar Traza"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Manipulación de epiciclos de la capa seleccionada */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3>Epiciclos de {activeLayer.name}</h3>
+                <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {activeLayer.numEpicycles > 0 && activeLayer.numEpicycles < activeFourierLength 
+                    ? `${activeLayer.numEpicycles} / ${activeFourierLength}` 
+                    : `Todos (${activeFourierLength})`}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="1" 
+                max={Math.max(1, activeFourierLength)} 
+                value={activeLayer.numEpicycles > 0 ? activeLayer.numEpicycles : activeFourierLength}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  onUpdateLayer(activeLayer.id, { numEpicycles: val >= activeFourierLength ? 0 : val });
+                }}
+                disabled={activeFourierLength === 0}
+              />
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                Ajusta cuántos armónicos de Fourier componen esta traza.
+              </p>
+            </div>
+          </div>
+        );
+
       case 'style':
         return (
           <div className="toolbar-sections">
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h3 style={{ margin: 0 }}>Forma de Rotores</h3>
+                <h3 style={{ margin: 0 }}>Forma de Rotores ({activeLayer.name})</h3>
                 <button 
                   type="button" 
                   className="btn" 
-                  style={{ padding: '3px 8px', fontSize: '0.72rem', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                  style={{ padding: '3px 8px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                   onClick={() => setShowCustomModal(true)}
                 >
-                  <PlusCircle size={13} /> Diseñar Forma
+                  <PlusCircle size={13} /> Personalizada
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '6px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                 {[
-                  { id: 'circle', label: 'Círculo', icon: '⚪' },
+                  { id: 'circle', label: 'Círculo', icon: '⭕' },
                   { id: 'triangle', label: 'Triángulo', icon: '🔺' },
-                  { id: 'heart', label: 'Corazón', icon: '❤️' },
-                  { id: 'square', label: 'Cuadrado', icon: '🟦' },
-                  { id: 'star', label: 'Estrella', icon: '⭐' },
+                  { id: 'square', label: 'Cuadrado', icon: '⬛' },
+                  { id: 'heart', label: 'Corazón', icon: '💖' },
                   { id: 'pentagon', label: 'Pentágono', icon: '⬟' },
                   { id: 'hexagon', label: 'Hexágono', icon: '⬡' },
-                  { id: 'custom', label: 'Mi Forma', icon: '✨', disabled: !customRotorShape },
-                ].map(shape => (
+                  { id: 'star', label: 'Estrella', icon: '⭐' },
+                  { id: 'custom', label: 'Libre', icon: '✏️' },
+                ].map(item => (
                   <button
-                    key={shape.id}
+                    key={item.id}
                     type="button"
-                    disabled={shape.disabled}
-                    className={`btn ${epicycleShape === shape.id ? 'primary' : ''}`}
-                    style={{ padding: '6px 2px', fontSize: '0.68rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', opacity: shape.disabled ? 0.35 : 1 }}
+                    className={`btn ${activeLayer.epicycleShape === item.id ? 'primary' : ''}`}
+                    style={{
+                      padding: '8px 4px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '0.7rem'
+                    }}
                     onClick={() => {
-                      if (shape.id === 'custom' && !customRotorShape) {
+                      if (item.id === 'custom' && !customRotorShape) {
                         setShowCustomModal(true);
                       } else {
-                        setEpicycleShape && setEpicycleShape(shape.id);
+                        onUpdateLayer(activeLayer.id, { epicycleShape: item.id });
                       }
                     }}
                   >
-                    <span style={{ fontSize: '1rem' }}>{shape.icon}</span>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{shape.label}</span>
+                    <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="control-group">
-              <h3>Colores</h3>
-              <div className="color-picker-row">
-                <label><Palette size={16}/> Epiciclos</label>
-                <input type="color" value={epicycleColor} onChange={(e) => setEpicycleColor(e.target.value)} />
-              </div>
-              <div className="color-picker-row">
-                <label><Palette size={16}/> Ruta</label>
-                <input type="color" value={pathColor} onChange={(e) => setPathColor(e.target.value)} />
+              <h3>Colores de {activeLayer.name}</h3>
+              <div className="color-inputs">
+                <label>
+                  <span>Epiciclos:</span>
+                  <input 
+                    type="color" 
+                    value={activeLayer.epicycleColor || '#3b82f6'} 
+                    onChange={(e) => onUpdateLayer(activeLayer.id, { epicycleColor: e.target.value })} 
+                  />
+                </label>
+                <label>
+                  <span>Trazo:</span>
+                  <input 
+                    type="color" 
+                    value={activeLayer.pathColor || '#38bdf8'} 
+                    onChange={(e) => onUpdateLayer(activeLayer.id, { pathColor: e.target.value })} 
+                  />
+                </label>
               </div>
             </div>
 
             <div className="control-group">
-              <h3>Dimensiones</h3>
-              <div className="slider-row">
-                <label>Escala Dibujo <span>{pathScale.toFixed(1)}x</span></label>
-                <input type="range" min="0.1" max="5" step="0.1" value={pathScale} onChange={(e) => setPathScale(parseFloat(e.target.value))} />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <h3>Grosor de Epiciclos</h3>
+                <span>{activeLayer.epicycleThickness || 1}px</span>
               </div>
-              <div className="slider-row">
-                <label>Grosor Epiciclos <span>{epicycleThickness}px</span></label>
-                <input type="range" min="0.1" max="5" step="0.1" value={epicycleThickness} onChange={(e) => setEpicycleThickness(parseFloat(e.target.value))} />
+              <input 
+                type="range" min="0.5" max="5" step="0.5" 
+                value={activeLayer.epicycleThickness || 1} 
+                onChange={(e) => onUpdateLayer(activeLayer.id, { epicycleThickness: parseFloat(e.target.value) })} 
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px' }}>
+                <h3>Grosor del Trazo</h3>
+                <span>{activeLayer.pathThickness || 3}px</span>
               </div>
-              <div className="slider-row">
-                <label>Grosor Ruta <span>{pathThickness}px</span></label>
-                <input type="range" min="0.1" max="10" step="0.1" value={pathThickness} onChange={(e) => setPathThickness(parseFloat(e.target.value))} />
-              </div>
-              <div className="slider-row">
-                <label>Tamaño Puntos <span>{pointSize}px</span></label>
-                <input type="range" min="1" max="10" step="1" value={pointSize} onChange={(e) => setPointSize(parseInt(e.target.value))} />
-              </div>
-              <div className="slider-row">
-                <label>Radio Imán <span>{snapRadius}px</span></label>
-                <input type="range" min="5" max="50" step="1" value={snapRadius} onChange={(e) => setSnapRadius(parseInt(e.target.value))} />
-              </div>
+              <input 
+                type="range" min="1" max="10" step="0.5" 
+                value={activeLayer.pathThickness || 3} 
+                onChange={(e) => onUpdateLayer(activeLayer.id, { pathThickness: parseFloat(e.target.value) })} 
+              />
             </div>
           </div>
         );
@@ -220,53 +382,69 @@ export default function Toolbar({
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <h3>Velocidad</h3>
-              <div className="slider-row">
-                <label>Velocidad <span>{animationSpeed}x</span></label>
-                <input type="range" min="0.1" max="5" step="0.1" value={animationSpeed} onChange={(e) => setAnimationSpeed(parseFloat(e.target.value))} />
-              </div>
-              <button className={`btn ${isAnimating ? 'danger' : 'primary'} w-full`} onClick={onToggleAnimation}>
+              <button 
+                className={`btn ${isAnimating ? 'danger' : 'primary'} w-full`} 
+                style={{ padding: '12px', fontSize: '0.9rem', fontWeight: 'bold' }}
+                onClick={onToggleAnimation}
+              >
                 {isAnimating ? <Square size={18} /> : <Play size={18} />}
-                {isAnimating ? 'Detener' : 'Iniciar Animación'}
+                {isAnimating ? 'Pausar Simulación' : 'Iniciar Simulación'}
               </button>
             </div>
 
             <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <h3>Velocidad de Animación</h3>
+                <span>{animationSpeed}x</span>
+              </div>
+              <input 
+                type="range" min="0.1" max="5" step="0.1" 
+                value={animationSpeed} 
+                onChange={(e) => setAnimationSpeed(parseFloat(e.target.value))} 
+              />
+            </div>
+
+            {/* Slider de Manipulación de Epiciclos */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3>Cantidad de Epiciclos ({activeLayer.name})</h3>
+                <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {activeLayer.numEpicycles > 0 && activeLayer.numEpicycles < activeFourierLength 
+                    ? `${activeLayer.numEpicycles} / ${activeFourierLength}` 
+                    : `Todos (${activeFourierLength})`}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="1" 
+                max={Math.max(1, activeFourierLength)} 
+                value={activeLayer.numEpicycles > 0 ? activeLayer.numEpicycles : activeFourierLength}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  onUpdateLayer(activeLayer.id, { numEpicycles: val >= activeFourierLength ? 0 : val });
+                }}
+                disabled={activeFourierLength === 0}
+              />
+            </div>
+
+            <div className="control-group">
               <h3>Calidad de Exportación</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+              <div className="quality-grid">
                 {[
-                  { id: '480p', label: '480p SD', badge: 'Gratis', unlocked: true },
-                  { id: '720p', label: '720p HD', badge: '🔓 Con Cuenta', unlocked: !!session || isPremium },
-                  { id: '1080p', label: '1080p FHD', badge: '⭐ Premium', unlocked: isPremium },
-                  { id: '2k', label: '2K QHD', badge: '⭐ Premium', unlocked: isPremium },
-                  { id: '4k', label: '4K Ultra HD', badge: '⭐ Premium', unlocked: isPremium },
-                ].map(item => {
+                  { id: '480p', label: '480P', badge: 'Gratis', unlocked: true },
+                  { id: '720p', label: '720P HD', badge: 'Con Cuenta', unlocked: !!session || isPremium },
+                  { id: '1080p', label: '1080P FHD', badge: 'Premium', unlocked: isPremium },
+                  { id: '2k', label: '2K QHD', badge: 'Premium', unlocked: isPremium },
+                  { id: '4k', label: '4K UHD', badge: 'Premium', unlocked: isPremium },
+                ].map((item) => {
                   const isSelected = exportQuality === item.id;
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => {
-                        if (item.unlocked) {
-                          setExportQuality && setExportQuality(item.id);
-                        } else if (!session) {
-                          onLoginClick();
-                        } else {
-                          if (setActiveTab) setActiveTab('project');
-                          alert("Esta resolución (" + item.label + ") requiere suscripción Premium. ¡Desbloquéala en la pestaña Proyecto!");
-                        }
-                      }}
-                      className={`btn ${isSelected ? 'primary' : ''}`}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '8px 12px',
-                        fontSize: '0.8rem',
-                        opacity: item.unlocked ? 1 : 0.65,
-                        border: isSelected ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.08)',
-                        background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.03)'
-                      }}
+                      disabled={!item.unlocked}
+                      className={`quality-btn ${isSelected ? 'selected' : ''}`}
+                      onClick={() => setExportQuality(item.id)}
                     >
                       <span style={{ fontWeight: isSelected ? 'bold' : 'normal' }}>{item.label}</span>
                       <span style={{
@@ -287,7 +465,7 @@ export default function Toolbar({
             <div className="control-group">
               <h3>Renderizado 60 FPS (Sin Lag)</h3>
               <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: '0 0 10px 0', lineHeight: '1.35' }}>
-                Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano, recortando únicamente la zona del marco.
+                Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano con todas las trazas.
               </p>
               
               <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
@@ -352,8 +530,7 @@ export default function Toolbar({
                 isPremium={isPremium}
                 session={session} 
                 onLogout={onLogout} 
-                currentPoints={currentPoints}
-                onSaveProject={(pts) => onSavePoints(pts)}
+                currentPoints={activeLayer.points || []} 
                 onLoadProject={onLoadProject}
                 isDevUser={isDevUser}
                 devPremiumToggle={devPremiumToggle}
@@ -361,21 +538,25 @@ export default function Toolbar({
               />
             )}
 
-            <div className="control-group">
-              <h3>Archivos locales</h3>
+            <div className="control-group" style={{ marginTop: '12px' }}>
+              <h3>Archivos Locales</h3>
               <div className="button-row">
-                <label className="btn icon-btn" title="Subir Imagen de Fondo">
-                  <Upload size={18} />
-                  <input type="file" accept="image/*" onChange={handleFileChange} />
-                </label>
-                <button className="btn icon-btn" onClick={onSavePoints} title="Guardar Puntos (JSON)">
-                  <Save size={18} />
+                <button className="btn icon-btn" onClick={onSavePoints} title="Guardar Proyecto (JSON)">
+                  <Save size={18} /> Guardar
                 </button>
-                <label className="btn icon-btn" title="Cargar Puntos (JSON)">
-                  <FolderOpen size={18} />
-                  <input type="file" accept=".json" onChange={onLoadPoints} />
+                <label className="btn icon-btn" title="Cargar Proyecto (JSON)" style={{ cursor: 'pointer' }}>
+                  <FolderOpen size={18} /> Cargar
+                  <input type="file" accept=".json" onChange={onLoadPoints} style={{ display: 'none' }} />
                 </label>
               </div>
+            </div>
+
+            <div className="control-group">
+              <h3>Imagen de Fondo</h3>
+              <label className="btn file-upload-label w-full">
+                <Upload size={18} /> Subir Imagen Guía
+                <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+              </label>
             </div>
           </div>
         );
@@ -387,33 +568,30 @@ export default function Toolbar({
 
   return (
     <>
-      {/* DESKTOP FLOATING SIDEBAR */}
+      {/* SIDEBAR PARA ESCRITORIO */}
       <div className="desktop-toolbar glass-panel">
-        <div className="toolbar-tabs-header">
+        <div className="tab-headers">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => {
-                  if (setActiveTab) setActiveTab(tab.id);
-                }}
-                title={tab.label}
+                onClick={() => setActiveTab(tab.id)}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 <span>{tab.label}</span>
               </button>
             );
           })}
         </div>
-        <div className="toolbar-body">
+        <div className="tab-body">
           {renderTabContent()}
         </div>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="mobile-bottom-nav glass-panel">
+      {/* NAVEGACIÓN INFERIOR PARA MÓVIL */}
+      <nav className="mobile-bottom-nav">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id && mobileSheetOpen;
@@ -430,15 +608,11 @@ export default function Toolbar({
         })}
       </nav>
 
-      {/* MOBILE BOTTOM SHEET MODAL */}
+      {/* BOTTOM SHEET DESLIZABLE PARA MÓVIL */}
       {mobileSheetOpen && (
         <div className="mobile-bottom-sheet glass-panel">
           <div className="sheet-handle" onClick={() => setMobileSheetOpen(false)}>
             <div className="handle-bar" />
-          </div>
-          <div className="sheet-header">
-            <h3>{TABS.find(t => t.id === activeTab)?.label}</h3>
-            <button className="sheet-close-btn" onClick={() => setMobileSheetOpen(false)}>✕</button>
           </div>
           <div className="sheet-content">
             {renderTabContent()}
@@ -446,23 +620,27 @@ export default function Toolbar({
         </div>
       )}
 
-      {/* CUSTOM ROTOR SHAPE DESIGNER MODAL */}
-      {showCustomModal && (
-        <CustomRotorModal
-          onClose={() => setShowCustomModal(false)}
-          currentCustomShape={customRotorShape}
-          onSaveCustomShape={(relativePoints) => {
-            if (setCustomRotorShape) setCustomRotorShape(relativePoints);
-            if (setEpicycleShape) setEpicycleShape('custom');
-          }}
+      {/* Modal de Anuncio Intersticial */}
+      {pendingDownload && (
+        <AdInterstitialModal
+          onClose={() => setPendingDownload(null)}
+          onAdWatched={executeDownload}
         />
       )}
 
-      {/* INTERSTITIAL AD MODAL */}
-      {pendingDownload && (
-        <AdInterstitialModal
-          onSkip={executeDownload}
-          title="Preparando tu descarga"
+      {/* Modal de Diseñador de Formas Libres */}
+      {showCustomModal && (
+        <CustomRotorModal
+          initialPoints={customRotorShape}
+          onSave={(pts) => {
+            setCustomRotorShape(pts);
+            onUpdateLayer(activeLayer.id, { 
+              epicycleShape: 'custom',
+              customRotorShape: pts 
+            });
+            setShowCustomModal(false);
+          }}
+          onClose={() => setShowCustomModal(false)}
         />
       )}
     </>

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Stage, Layer, Image, Line, Circle, Rect, Group, Text } from 'react-konva';
+import { Stage, Layer, Image, Line, Circle, Rect, Group } from 'react-konva';
 import useImage from 'use-image';
 import { generateSpline } from '../utils/math';
 
@@ -9,23 +9,15 @@ const CanvasStage = forwardRef(function CanvasStage({
   mode,
   activeTab = 'draw',
   bgImage,
-  points,
-  commitPoints,
-  origin,
-  setOrigin,
-  fourier,
-  time,
-  path,
+  layers = [],
+  activeLayerId,
+  commitLayerPoints,
+  setLayerOrigin,
+  time = 0,
   stageRef,
-  isRecording,
-  epicycleColor,
-  pathColor,
-  epicycleThickness = 1,
-  pathThickness = 3,
+  isRecording = false,
   pointSize = 3,
   snapRadius = 15,
-  epicycleShape = 'circle',
-  customRotorShape = null,
   recordingBox,
   setRecordingBox,
   showRecordingBox = false
@@ -39,8 +31,16 @@ const CanvasStage = forwardRef(function CanvasStage({
   const [stageScale, setStageScale] = useState(1);
   const [stageX, setStageX] = useState(0);
   const [stageY, setStageY] = useState(0);
-  
-  const displayPoints = localPoints || points;
+
+  // Capa activa actual
+  const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {
+    id: 'default',
+    points: [],
+    drawType: 'pencil',
+    origin: { x: width / 2, y: height / 2 }
+  };
+
+  const currentPoints = localPoints || activeLayer.points || [];
 
   // Exponer métodos de zoom y vista al componente padre
   useImperativeHandle(ref, () => ({
@@ -85,7 +85,8 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const getSnappedPoint = (pos) => {
-    for (let p of points) {
+    // Buscar puntos en la capa activa para imantar
+    for (let p of currentPoints) {
       if (Math.hypot(p.x - pos.x, p.y - pos.y) < snapRadius) {
         return { x: p.x, y: p.y };
       }
@@ -97,7 +98,6 @@ const CanvasStage = forwardRef(function CanvasStage({
 
   const handleMouseDown = (e) => {
     if (isRecording) return;
-    // Si no estamos en la pestaña de dibujo y no es mover origen, el lienzo sólo sirve para desplazar
     if (activeTab !== 'draw' && mode !== 'moveOrigin') return;
 
     const stage = e.target.getStage();
@@ -107,16 +107,16 @@ const CanvasStage = forwardRef(function CanvasStage({
 
     if (mode === 'draw-pencil') {
       setIsDrawing(true);
-      setLocalPoints([...points, { x: rawPos.x, y: rawPos.y }]);
+      setLocalPoints([...activeLayer.points, { x: rawPos.x, y: rawPos.y }]);
     } else if (mode === 'draw-line' || mode === 'draw-curve') {
       const pos = getSnappedPoint(rawPos);
-      if (points.length > 0) {
-        const lastPoint = points[points.length - 1];
+      if (activeLayer.points.length > 0) {
+        const lastPoint = activeLayer.points[activeLayer.points.length - 1];
         if (Math.hypot(lastPoint.x - pos.x, lastPoint.y - pos.y) < 1) {
           return;
         }
       }
-      commitPoints([...points, pos]);
+      commitLayerPoints([...activeLayer.points, pos]);
     }
   };
 
@@ -125,15 +125,15 @@ const CanvasStage = forwardRef(function CanvasStage({
     const stage = e.target.getStage();
     const pos = getRelativePointerPosition(stage);
     
-    if (displayPoints.length === 0) {
+    if (currentPoints.length === 0) {
       setLocalPoints([{ x: pos.x, y: pos.y }]);
       return;
     }
     
-    const lastPoint = displayPoints[displayPoints.length - 1];
+    const lastPoint = currentPoints[currentPoints.length - 1];
     const dist = Math.hypot(pos.x - lastPoint.x, pos.y - lastPoint.y);
     if (dist > 3) {
-      setLocalPoints([...displayPoints, { x: pos.x, y: pos.y }]);
+      setLocalPoints([...currentPoints, { x: pos.x, y: pos.y }]);
     }
   };
 
@@ -141,7 +141,7 @@ const CanvasStage = forwardRef(function CanvasStage({
     if (isDrawing && mode === 'draw-pencil') {
       setIsDrawing(false);
       if (localPoints) {
-        commitPoints(localPoints);
+        commitLayerPoints(localPoints);
         setLocalPoints(null);
       }
     }
@@ -177,8 +177,8 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const handleDragOrigin = (e) => {
-    if (mode === 'moveOrigin') {
-      setOrigin({
+    if (mode === 'moveOrigin' && setLayerOrigin) {
+      setLayerOrigin({
         x: e.target.x(),
         y: e.target.y()
       });
@@ -187,7 +187,7 @@ const CanvasStage = forwardRef(function CanvasStage({
 
   const handlePointDragMove = (e, index) => {
     if (mode === 'edit' && activeTab === 'draw') {
-      const newPoints = [...displayPoints];
+      const newPoints = [...currentPoints];
       newPoints[index] = {
         x: e.target.x(),
         y: e.target.y()
@@ -205,23 +205,10 @@ const CanvasStage = forwardRef(function CanvasStage({
   const handlePointDragEnd = () => {
     setDraggedPointIndex(null);
     if (mode === 'edit' && localPoints) {
-      commitPoints(localPoints);
+      commitLayerPoints(localPoints);
       setLocalPoints(null);
     }
   };
-
-  const hexToRgba = (hex, opacity) => {
-    let r = 0, g = 0, b = 0;
-    if (hex && hex.length === 7) {
-      r = parseInt(hex.substring(1, 3), 16);
-      g = parseInt(hex.substring(3, 5), 16);
-      b = parseInt(hex.substring(5, 7), 16);
-    }
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  };
-
-  const epicycleStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
-  const epicycleLineStroke = epicycleColor ? hexToRgba(epicycleColor, 1) : "rgba(255, 255, 255, 1)";
 
   // Generador de Polígonos regulares
   const getPolygonPoints = (cx, cy, r, theta, sides) => {
@@ -252,7 +239,6 @@ const CanvasStage = forwardRef(function CanvasStage({
     const cosT = Math.cos(theta);
     const sinT = Math.sin(theta);
     
-    // Lado derecho
     const p0 = { u: 0, v: 0 };
     const p1 = { u: -0.22 * r, v: 0.58 * r };
     const p2 = { u: 0.45 * r, v: 0.68 * r };
@@ -265,7 +251,6 @@ const CanvasStage = forwardRef(function CanvasStage({
       pts.push(cx + u * cosT - v * sinT, cy + u * sinT + v * cosT);
     }
     
-    // Lado izquierdo
     const q0 = { u: r, v: 0 };
     const q1 = { u: 0.45 * r, v: -0.68 * r };
     const q2 = { u: -0.22 * r, v: -0.58 * r };
@@ -295,142 +280,6 @@ const CanvasStage = forwardRef(function CanvasStage({
     return pts;
   };
 
-  const renderPoints = useMemo(() => {
-    if (mode === 'draw-curve' && displayPoints.length >= 3) {
-      return generateSpline(displayPoints, 16, false);
-    }
-    return displayPoints;
-  }, [displayPoints, mode]);
-
-  const linePoints = renderPoints.flatMap(p => [p.x, p.y]);
-  const epicyclePath = path.flatMap(p => [p.x, p.y]);
-
-  let epicycles = [];
-  if (fourier && fourier.length > 0) {
-    let x = origin.x;
-    let y = origin.y;
-    
-    for (let i = 0; i < fourier.length; i++) {
-      let prevX = x;
-      let prevY = y;
-      let freq = fourier[i].freq;
-      let radius = fourier[i].amp;
-      let phase = fourier[i].phase;
-      let angle = freq * time + phase;
-      
-      x += radius * Math.cos(angle);
-      y += radius * Math.sin(angle);
-
-      let shapeElement = null;
-      if (epicycleShape === 'triangle') {
-        shapeElement = (
-          <Line
-            points={getPolygonPoints(prevX, prevY, radius, angle, 3)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'square') {
-        shapeElement = (
-          <Line
-            points={getPolygonPoints(prevX, prevY, radius, angle, 4)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'heart') {
-        shapeElement = (
-          <Line
-            points={getHeartPoints(prevX, prevY, radius, angle)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'custom' && customRotorShape) {
-        shapeElement = (
-          <Line
-            points={getCustomShapePoints(prevX, prevY, radius, angle, customRotorShape)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'pentagon') {
-        shapeElement = (
-          <Line
-            points={getPolygonPoints(prevX, prevY, radius, angle, 5)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'hexagon') {
-        shapeElement = (
-          <Line
-            points={getPolygonPoints(prevX, prevY, radius, angle, 6)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else if (epicycleShape === 'star') {
-        shapeElement = (
-          <Line
-            points={getStarPoints(prevX, prevY, radius, angle, 5)}
-            closed={true}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      } else {
-        shapeElement = (
-          <Circle
-            x={prevX}
-            y={prevY}
-            radius={radius}
-            stroke={epicycleStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        );
-      }
-      
-      epicycles.push(
-        <React.Fragment key={i}>
-          {shapeElement}
-          <Line
-            points={[prevX, prevY, x, y]}
-            stroke={epicycleLineStroke}
-            strokeWidth={epicycleThickness}
-            listening={false}
-          />
-        </React.Fragment>
-      );
-    }
-    
-    epicycles.push(
-      <Circle
-        key="tip"
-        x={x}
-        y={y}
-        radius={Math.max(pointSize, epicycleThickness * 1.5)}
-        fill={pathColor || "#3b82f6"}
-        listening={false}
-      />
-    );
-  }
-
-  // Permitir arrastre universal del lienzo cuando no se dibuja activamente
   const isPanEnabled = mode === 'pan' || activeTab !== 'draw';
 
   return (
@@ -510,6 +359,7 @@ const CanvasStage = forwardRef(function CanvasStage({
       className="canvas-wrapper"
     >
       <Layer>
+        {/* Imagen de fondo de guía */}
         {!isRecording && image && (
           <Image
             image={image}
@@ -518,21 +368,37 @@ const CanvasStage = forwardRef(function CanvasStage({
           />
         )}
         
-        {/* User drawn line */}
-        {!isRecording && (
-          <Line
-            points={linePoints}
-            stroke="#ef4444"
-            strokeWidth={2 / stageScale}
-            lineCap="round"
-            lineJoin="round"
-            listening={false}
-          />
-        )}
+        {/* Renderizado de trazos dibujados de cada capa */}
+        {!isRecording && layers.map((layer) => {
+          if (layer.visible === false) return null;
+          
+          const isCurrentActive = layer.id === activeLayer.id;
+          const rawPts = isCurrentActive ? currentPoints : (layer.points || []);
+          if (rawPts.length === 0) return null;
 
-        {/* Edit Points & Snapping */}
-        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && displayPoints.map((p, i) => (
-          <React.Fragment key={i}>
+          // Si el tipo guardado del trazo es 'curve', siempre interpolar spline centripetal
+          const ptsToRender = (layer.drawType === 'curve' && rawPts.length >= 3)
+            ? generateSpline(rawPts, 16, false)
+            : rawPts;
+
+          const flatPoints = ptsToRender.flatMap(p => [p.x, p.y]);
+
+          return (
+            <Line
+              key={`line-${layer.id}`}
+              points={flatPoints}
+              stroke={isCurrentActive ? (layer.pathColor || '#ef4444') : 'rgba(255, 255, 255, 0.35)'}
+              strokeWidth={(isCurrentActive ? 2.5 : 1.5) / stageScale}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+            />
+          );
+        })}
+
+        {/* Puntos de edición de la capa activa */}
+        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => (
+          <React.Fragment key={`pt-${i}`}>
             {(mode === 'draw-line' || mode === 'draw-curve') && (
               <Circle
                 x={p.x}
@@ -558,25 +424,184 @@ const CanvasStage = forwardRef(function CanvasStage({
           </React.Fragment>
         ))}
 
-        {/* Epicycle traced path */}
-        <Line
-          points={epicyclePath}
-          stroke={pathColor || "#3b82f6"}
-          strokeWidth={pathThickness}
-          lineCap="round"
-          lineJoin="round"
-        />
+        {/* Renderizado de Caminos Trazados y Cadenas de Epiciclos de TODAS las capas visibles */}
+        {layers.map((layer) => {
+          if (layer.visible === false) return null;
 
-        {/* Epicycles */}
-        {epicycles}
+          const fList = layer.effectiveFourier || layer.fourier;
+          const lOrigin = layer.origin || { x: width / 2, y: height / 2 };
+          const lShape = layer.epicycleShape || 'circle';
+          const lCustom = layer.customRotorShape || null;
+          const lEpicycleColor = layer.epicycleColor || '#3b82f6';
+          const lPathColor = layer.pathColor || '#38bdf8';
+          const lEpicycleThick = (layer.epicycleThickness || 1) / stageScale;
+          const lPathThick = (layer.pathThickness || 3) / stageScale;
+          const lPath = layer.path || [];
 
-        {/* Origin Marker */}
-        {!isRecording && (
+          const flatPath = lPath.flatMap(p => [p.x, p.y]);
+
+          const epicycleElements = [];
+
+          if (fList && fList.length > 0) {
+            let x = lOrigin.x;
+            let y = lOrigin.y;
+
+            for (let i = 0; i < fList.length; i++) {
+              let prevX = x;
+              let prevY = y;
+              let freq = fList[i].freq;
+              let radius = fList[i].amp;
+              let phase = fList[i].phase;
+              let angle = freq * time + phase;
+
+              x += radius * Math.cos(angle);
+              y += radius * Math.sin(angle);
+
+              let shapeEl = null;
+              if (lShape === 'triangle') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getPolygonPoints(prevX, prevY, radius, angle, 3)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'square') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getPolygonPoints(prevX, prevY, radius, angle, 4)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'heart') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getHeartPoints(prevX, prevY, radius, angle)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'custom' && lCustom) {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getCustomShapePoints(prevX, prevY, radius, angle, lCustom)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'pentagon') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getPolygonPoints(prevX, prevY, radius, angle, 5)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'hexagon') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getPolygonPoints(prevX, prevY, radius, angle, 6)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else if (lShape === 'star') {
+                shapeEl = (
+                  <Line
+                    key={`shp-${i}`}
+                    points={getStarPoints(prevX, prevY, radius, angle, 5)}
+                    closed={true}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              } else {
+                shapeEl = (
+                  <Circle
+                    key={`shp-${i}`}
+                    x={prevX}
+                    y={prevY}
+                    radius={radius}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                );
+              }
+
+              epicycleElements.push(
+                <React.Fragment key={`epi-${layer.id}-${i}`}>
+                  {shapeEl}
+                  <Line
+                    points={[prevX, prevY, x, y]}
+                    stroke={lEpicycleColor}
+                    strokeWidth={lEpicycleThick}
+                    listening={false}
+                  />
+                </React.Fragment>
+              );
+            }
+
+            epicycleElements.push(
+              <Circle
+                key={`tip-${layer.id}`}
+                x={x}
+                y={y}
+                radius={Math.max(pointSize * 1.5, 4) / stageScale}
+                fill={lPathColor}
+                listening={false}
+              />
+            );
+          }
+
+          return (
+            <React.Fragment key={`layer-render-${layer.id}`}>
+              {/* Camino trazado */}
+              {flatPath.length > 0 && (
+                <Line
+                  points={flatPath}
+                  stroke={lPathColor}
+                  strokeWidth={lPathThick}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                />
+              )}
+              {/* Epiciclos */}
+              {epicycleElements}
+            </React.Fragment>
+          );
+        })}
+
+        {/* Marcador de Origen / Centro de la Capa Activa */}
+        {!isRecording && activeLayer && (
           <Circle
-            x={origin.x}
-            y={origin.y}
+            x={activeLayer.origin?.x || width / 2}
+            y={activeLayer.origin?.y || height / 2}
             radius={(pointSize + 5) / stageScale}
             fill={mode === 'moveOrigin' ? "#10b981" : "#475569"}
+            stroke="#ffffff"
+            strokeWidth={1.5 / stageScale}
             draggable={mode === 'moveOrigin'}
             onDragMove={handleDragOrigin}
           />
@@ -598,7 +623,6 @@ const CanvasStage = forwardRef(function CanvasStage({
               }
             }}
           >
-            {/* Fondo y contorno del marco */}
             <Rect
               width={recordingBox.width}
               height={recordingBox.height}
@@ -608,7 +632,7 @@ const CanvasStage = forwardRef(function CanvasStage({
               fill="rgba(56, 189, 248, 0.05)"
             />
 
-            {/* Líneas de guía tercios */}
+            {/* Guías de tercios */}
             <Line
               points={[recordingBox.width / 3, 0, recordingBox.width / 3, recordingBox.height]}
               stroke="rgba(56, 189, 248, 0.25)"
@@ -634,7 +658,7 @@ const CanvasStage = forwardRef(function CanvasStage({
               listening={false}
             />
 
-            {/* Manija de redimensionamiento (Esquina inferior derecha) */}
+            {/* Manija de esquina */}
             <Circle
               name="boxHandle"
               x={recordingBox.width}

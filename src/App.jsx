@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Toolbar from './components/Toolbar';
 import CanvasStage from './components/CanvasStage';
 import { dft } from './utils/fourier';
@@ -13,12 +13,29 @@ import { renderFourierVideoOffline } from './utils/videoRenderer';
 import { downloadOrShareVideo } from './services/downloader';
 import './App.css';
 
+const createDefaultLayer = (id = 'layer-1', name = 'Trazo 1', color = '#38bdf8') => ({
+  id,
+  name,
+  points: [],
+  drawType: 'pencil', // 'pencil' | 'line' | 'curve'
+  epicycleShape: 'circle',
+  customRotorShape: null,
+  epicycleColor: '#3b82f6',
+  pathColor: color,
+  epicycleThickness: 1,
+  pathThickness: 3,
+  numEpicycles: 0, // 0 = todos
+  visible: true,
+  origin: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+  manualOrigin: false
+});
+
 function App() {
   const [session, setSession] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isPremium, setIsPremium] = useState(false);
-  const [devPremiumToggle, setDevPremiumToggle] = useState(true); // Default ON for developer
+  const [devPremiumToggle, setDevPremiumToggle] = useState(true);
   
   const isDevUser = session?.user?.email === 'jstivelamatta@gmail.com';
   const effectivePremium = isPremium || (isDevUser && devPremiumToggle);
@@ -28,7 +45,7 @@ function App() {
       setIsPremium(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('is_premium')
       .eq('id', currentSession.user.id)
@@ -80,29 +97,23 @@ function App() {
   const [mode, setMode] = useState('draw-pencil'); 
   const [bgImage, setBgImage] = useState(null);
   
-  // History State for Undo/Redo
-  const [pointsHistory, setPointsHistory] = useState([[]]);
+  // SISTEMA MULTICAPA / TRAZAS CON HISTORIAL (UNDO/REDO)
+  const [layersHistory, setLayersHistory] = useState([[createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8')]]);
   const [historyIndex, setHistoryIndex] = useState(0);
-  
-  const points = pointsHistory[historyIndex]; 
+  const layers = layersHistory[historyIndex] || [];
+  const [activeLayerId, setActiveLayerId] = useState('layer-1');
 
-  const [origin, setOrigin] = useState({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-  const [fourier, setFourier] = useState([]);
+  // Capa activa
+  const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || createDefaultLayer();
+
+  // Estados globales de reproducción y personalización
   const [time, setTime] = useState(0);
-  const [path, setPath] = useState([]);
+  const [layerPaths, setLayerPaths] = useState({});
   const [isAnimating, setIsAnimating] = useState(false);
-  const [manualOrigin, setManualOrigin] = useState(false);
-  
-  // Customization
   const [animationSpeed, setAnimationSpeed] = useState(1);
-  const [epicycleColor, setEpicycleColor] = useState('#3b82f6');
-  const [pathColor, setPathColor] = useState('#3b82f6');
-  const [epicycleThickness, setEpicycleThickness] = useState(1);
-  const [pathThickness, setPathThickness] = useState(3);
   const [pointSize, setPointSize] = useState(3);
   const [pathScale, setPathScale] = useState(1);
   const [snapRadius, setSnapRadius] = useState(15);
-  const [epicycleShape, setEpicycleShape] = useState('circle');
   const [customRotorShape, setCustomRotorShape] = useState(null);
   const [exportQuality, setExportQuality] = useState('480p');
   const [activeTab, setActiveTab] = useState('draw');
@@ -112,7 +123,7 @@ function App() {
     animationSpeedRef.current = animationSpeed;
   }, [animationSpeed]);
   
-  // Video Recording State
+  // Video Recording State (Grabación clásica)
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState(null);
   const [recordingMp4Url, setRecordingMp4Url] = useState(null);
@@ -120,12 +131,7 @@ function App() {
   const chunksRef = useRef([]);
 
   const stageRef = useRef(null);
-  const animationRef = useRef(null);
-  const isRecordingRef = useRef(isRecording);
-
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
+  const canvasStageRef = useRef(null);
 
   // Layout sizing
   const [windowSize, setWindowSize] = useState({
@@ -145,47 +151,6 @@ function App() {
   // Estado de Renderizado de Video Offline a 60 FPS
   const [isRenderingVideo, setIsRenderingVideo] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
-  const canvasStageRef = useRef(null);
-
-  const handleStartRenderVideo = async () => {
-    if (isRenderingVideo) {
-      setIsRenderingVideo(false);
-      return;
-    }
-    if (!fourier || fourier.length === 0) {
-      alert("Dibuja una figura primero para generar los epiciclos.");
-      return;
-    }
-
-    setIsRenderingVideo(true);
-    setRenderProgress(0);
-
-    try {
-      const { blob, url } = await renderFourierVideoOffline({
-        fourier,
-        origin,
-        epicycleShape,
-        customRotorShape,
-        epicycleColor,
-        pathColor,
-        epicycleThickness,
-        pathThickness,
-        exportQuality,
-        recordingBox: showRecordingBox ? recordingBox : null,
-        onProgress: (p) => setRenderProgress(p)
-      });
-
-      setIsRenderingVideo(false);
-      setRecordingUrl(url);
-      
-      // Descargar o compartir el video 60 FPS inmediatamente
-      downloadOrShareVideo(url, 'webm');
-    } catch (err) {
-      console.error(err);
-      alert("Error al renderizar el video: " + (err.message || err));
-      setIsRenderingVideo(false);
-    }
-  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -198,34 +163,176 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Update Barycenter when points change 
-  useEffect(() => {
-    if (points.length > 0 && !manualOrigin) {
-      setOrigin(getBarycenter(points));
+  // GESTIÓN DE CAPAS / TRAZAS
+  const commitLayers = useCallback((newLayers) => {
+    const newHistory = layersHistory.slice(0, historyIndex + 1);
+    newHistory.push(newLayers);
+    setLayersHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  }, [layersHistory, historyIndex]);
+
+  const handleAddLayer = () => {
+    const newId = `layer-${Date.now()}`;
+    const colors = ['#38bdf8', '#ec4899', '#f59e0b', '#10b981', '#a855f7', '#ef4444'];
+    const color = colors[layers.length % colors.length];
+    const newLayer = createDefaultLayer(newId, `Trazo ${layers.length + 1}`, color);
+    commitLayers([...layers, newLayer]);
+    setActiveLayerId(newId);
+  };
+
+  const handleDeleteLayer = (layerId) => {
+    if (layers.length <= 1) return;
+    const nextLayers = layers.filter(l => l.id !== layerId);
+    commitLayers(nextLayers);
+    if (activeLayerId === layerId) {
+      setActiveLayerId(nextLayers[0].id);
     }
-  }, [points, manualOrigin]);
+  };
+
+  const handleUpdateLayer = (layerId, patch) => {
+    const nextLayers = layers.map(l => l.id === layerId ? { ...l, ...patch } : l);
+    commitLayers(nextLayers);
+  };
+
+  const commitLayerPoints = (newPts) => {
+    const nextLayers = layers.map(l => {
+      if (l.id === activeLayerId) {
+        return { ...l, points: newPts };
+      }
+      return l;
+    });
+    commitLayers(nextLayers);
+  };
+
+  const setLayerOrigin = (newOrigin) => {
+    const nextLayers = layers.map(l => {
+      if (l.id === activeLayerId) {
+        return { ...l, origin: newOrigin, manualOrigin: true };
+      }
+      return l;
+    });
+    commitLayers(nextLayers);
+  };
+
+  // CÁLCULO DE FOURIER Y CENTROIDES POR CAPA
+  const computedLayers = useMemo(() => {
+    return layers.map(layer => {
+      if (!layer.visible || !layer.points || layer.points.length < 2) {
+        return {
+          ...layer,
+          renderPoints: layer.points || [],
+          fourier: [],
+          effectiveFourier: [],
+          path: layerPaths[layer.id] || []
+        };
+      }
+
+      // Si el trazo guardado es de tipo curva suave, generar interpolación Catmull-Rom
+      const renderPoints = (layer.drawType === 'curve' && layer.points.length >= 3)
+        ? generateSpline(layer.points, 16, false)
+        : layer.points;
+
+      const resampled = resamplePath(renderPoints, 2 * pathScale);
+      const layerOrigin = layer.manualOrigin 
+        ? layer.origin 
+        : getBarycenter(renderPoints);
+
+      const fourier = resampled.length > 1 ? dft(resampled, layerOrigin) : [];
+
+      // Si el usuario especificó cantidad máxima de armónicos/epiciclos
+      const effectiveFourier = (layer.numEpicycles > 0 && layer.numEpicycles < fourier.length)
+        ? fourier.slice(0, layer.numEpicycles)
+        : fourier;
+
+      return {
+        ...layer,
+        renderPoints,
+        origin: layerOrigin,
+        fourier,
+        effectiveFourier,
+        path: layerPaths[layer.id] || []
+      };
+    });
+  }, [layers, pathScale, layerPaths]);
+
+  // Bucle de Animación Simultánea Multicapa
+  useEffect(() => {
+    let animId;
+    const hasAnyFourier = computedLayers.some(l => l.effectiveFourier?.length > 0);
+
+    if (isAnimating && hasAnyFourier) {
+      const update = () => {
+        setTime((prevTime) => {
+          // Tomar el tamaño de fourier más representativo para dt
+          const maxTerms = Math.max(...computedLayers.map(l => l.effectiveFourier?.length || 1), 1);
+          const dt = (2 * Math.PI) / maxTerms;
+          const nextTime = prevTime + dt * animationSpeedRef.current;
+
+          setLayerPaths((prevPaths) => {
+            const nextPaths = { ...prevPaths };
+            computedLayers.forEach(layer => {
+              const fList = layer.effectiveFourier;
+              if (fList && fList.length > 0 && layer.visible !== false) {
+                let x = layer.origin.x;
+                let y = layer.origin.y;
+                for (let i = 0; i < fList.length; i++) {
+                  x += fList[i].amp * Math.cos(fList[i].freq * prevTime + fList[i].phase);
+                  y += fList[i].amp * Math.sin(fList[i].freq * prevTime + fList[i].phase);
+                }
+                const cur = nextPaths[layer.id] || [];
+                nextPaths[layer.id] = [...cur, { x, y }];
+              }
+            });
+            return nextPaths;
+          });
+
+          return nextTime;
+        });
+        animId = requestAnimationFrame(update);
+      };
+      animId = requestAnimationFrame(update);
+    }
+    return () => cancelAnimationFrame(animId);
+  }, [isAnimating, computedLayers]);
+
+  const handleToggleAnimation = () => {
+    if (!isAnimating) {
+      setLayerPaths({});
+      setTime(0);
+    }
+    setIsAnimating(!isAnimating);
+  };
+
+  const handleClear = () => {
+    setLayersHistory([[createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8')]]);
+    setHistoryIndex(0);
+    setActiveLayerId('layer-1');
+    setLayerPaths({});
+    setTime(0);
+    setIsAnimating(false);
+    setBgImage(null);
+  };
 
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       setHistoryIndex(prev => prev - 1);
-      setPath([]);
-      setFourier([]);
+      setLayerPaths({});
+      setTime(0);
       setIsAnimating(false);
     }
   }, [historyIndex]);
 
   const handleRedo = useCallback(() => {
-    if (historyIndex < pointsHistory.length - 1) {
+    if (historyIndex < layersHistory.length - 1) {
       setHistoryIndex(prev => prev + 1);
-      setPath([]);
-      setFourier([]);
+      setLayerPaths({});
+      setTime(0);
       setIsAnimating(false);
     }
-  }, [historyIndex, pointsHistory.length]);
+  }, [historyIndex, layersHistory.length]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't override arrow keys if they are for panning (handled in CanvasStage)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         handleUndo();
@@ -238,161 +345,65 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
-  const commitPoints = (newPoints) => {
-    const newHistory = pointsHistory.slice(0, historyIndex + 1);
-    newHistory.push(newPoints);
-    setPointsHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-    setPath([]);
-    setFourier([]);
-    setIsAnimating(false);
-  };
-
-  useEffect(() => {
-    if (isAnimating) {
-      if (points.length > 0) {
-        let pathForDFT = points;
-        if (mode === 'draw-curve') {
-          pathForDFT = generateSpline(points, 20, false);
-        }
-
-        const spacing = 2; 
-        const resampledPoints = resamplePath(pathForDFT, spacing);
-        
-        const complexPoints = resampledPoints.map(p => ({
-          re: (p.x - origin.x) * pathScale,
-          im: (p.y - origin.y) * pathScale
-        }));
-        
-        const fourierData = dft(complexPoints);
-        setFourier(fourierData);
-        setPath([]);
-        setTime(0);
-      } else {
-        setIsAnimating(false);
-        alert("¡Por favor dibuja una ruta primero!");
-      }
+  // Renderizado Offline de Video a 60 FPS con todas las capas
+  const handleStartRenderVideo = async () => {
+    if (isRenderingVideo) {
+      setIsRenderingVideo(false);
+      return;
     }
-  }, [isAnimating, points, origin, pathScale, mode]);
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+    const hasFourier = computedLayers.some(l => l.effectiveFourier?.length > 0);
+    if (!hasFourier) {
+      alert("Dibuja al menos una figura para generar los epiciclos.");
+      return;
     }
-    setIsRecording(false);
-  };
 
-  useEffect(() => {
-    if (isAnimating && fourier.length > 0) {
-      // Force start from 0 to fix restart bug when time state hasn't flushed yet
-      let currentTime = 0; 
+    setIsRenderingVideo(true);
+    setRenderProgress(0);
+
+    try {
+      const { blob, url } = await renderFourierVideoOffline({
+        layers: computedLayers,
+        exportQuality,
+        recordingBox: showRecordingBox ? recordingBox : null,
+        onProgress: (p) => setRenderProgress(p)
+      });
+
+      setIsRenderingVideo(false);
+      setRecordingUrl(url);
       
-      const animate = () => {
-        const dt = (2 * Math.PI) / fourier.length;
-        // Total time increment for this frame
-        let frameDelta = dt * animationSpeedRef.current;
-        
-        // If speed is very high, processing it in one go makes jagged lines.
-        // We divide the frame into smaller substeps to preserve path resolution.
-        const substeps = Math.ceil(frameDelta / (dt * 0.5));
-        const subDelta = frameDelta / substeps;
-        
-        let newPathPoints = [];
-        let newTime = currentTime;
-
-        for (let step = 0; step < substeps; step++) {
-          newTime += subDelta;
-          
-          let x = origin.x;
-          let y = origin.y;
-          for (let i = 0; i < fourier.length; i++) {
-            let freq = fourier[i].freq;
-            let radius = fourier[i].amp;
-            let phase = fourier[i].phase;
-            x += radius * Math.cos(freq * newTime + phase);
-            y += radius * Math.sin(freq * newTime + phase);
-          }
-          newPathPoints.push({ x, y });
-          
-          // Stop exactly at 1 full cycle
-          if (newTime >= Math.PI * 2) {
-            newTime = Math.PI * 2;
-            break;
-          }
-        }
-        
-        currentTime = newTime;
-        setTime(currentTime);
-        
-        setPath(prevPath => {
-          let updated = [...prevPath, ...newPathPoints];
-          // We don't slice because it should exactly finish drawing the shape and stop
-          return updated;
-        });
-
-        // Auto-stop logic
-        if (currentTime >= Math.PI * 2) {
-          setIsAnimating(false);
-          if (isRecordingRef.current) {
-            stopRecording();
-          }
-          return; // Stop animation loop
-        }
-
-        animationRef.current = requestAnimationFrame(animate);
-      };
-      
-      animationRef.current = requestAnimationFrame(animate);
-      return () => cancelAnimationFrame(animationRef.current);
+      // Descargar o compartir el video 60 FPS inmediatamente
+      downloadOrShareVideo(url, 'mp4');
+    } catch (err) {
+      console.error(err);
+      alert("Error al renderizar el video: " + (err.message || err));
+      setIsRenderingVideo(false);
     }
-  }, [isAnimating, fourier, origin]);
-
-  const handleClear = () => {
-    commitPoints([]);
-    setManualOrigin(false);
   };
 
-  const handleToggleAnimation = () => {
-    setIsAnimating(!isAnimating);
-  };
-
+  // Grabación en Tiempo Real
   const handleRecordToggle = () => {
     if (isRecording) {
-      stopRecording();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
     } else {
-      setRecordingUrl(null);
-      setRecordingMp4Url(null);
+      if (!stageRef.current) return;
+      
+      const canvas = stageRef.current.toCanvas();
+      const stream = canvas.captureStream(30);
+      
+      let mimeType = 'video/webm;codecs=vp9';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'video/webm';
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
       chunksRef.current = [];
-      const canvas = stageRef.current.content.querySelector('canvas');
-      
-      if (!canvas) {
-        alert("No se encontró el lienzo para grabar.");
-        return;
-      }
-      
-      const stream = canvas.captureStream(60);
-      
-      const BITRATES = {
-        '480p': 2500000,
-        '720p': 5000000,
-        '1080p': 12000000,
-        '2k': 24000000,
-        '4k': 50000000
-      };
-      
-      // Determine best available codec (some browsers support h264 for webm which converts better to mp4)
-      let options = { 
-        mimeType: 'video/webm',
-        videoBitsPerSecond: BITRATES[exportQuality] || 5000000
-      };
-      if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
-        options = { 
-          mimeType: 'video/webm;codecs=h264',
-          videoBitsPerSecond: BITRATES[exportQuality] || 5000000
-        };
-      }
-      
-      const mediaRecorder = new MediaRecorder(stream, options);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -401,11 +412,8 @@ function App() {
       };
 
       mediaRecorder.onstop = () => {
-        // WebM
         const blobWebM = new Blob(chunksRef.current, { type: 'video/webm' });
         setRecordingUrl(URL.createObjectURL(blobWebM));
-        
-        // MP4 (Container trick: works in many modern players when codec is h264 or generic)
         const blobMP4 = new Blob(chunksRef.current, { type: 'video/mp4' });
         setRecordingMp4Url(URL.createObjectURL(blobMP4));
       };
@@ -414,9 +422,8 @@ function App() {
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
       
-      // Auto-restart animation when recording starts
-      if (points.length > 0) {
-        setPath([]);
+      if (layers.some(l => l.points.length > 0)) {
+        setLayerPaths({});
         setTime(0);
         setIsAnimating(true);
       }
@@ -424,14 +431,16 @@ function App() {
   };
 
   const handleSavePoints = () => {
-    if (points.length === 0) return;
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(points));
-    const jsonStr = JSON.stringify(points);
+    const projectData = {
+      version: 2,
+      layers: layers
+    };
+    const jsonStr = JSON.stringify(projectData, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `epiciclos_${Date.now()}.json`;
+    a.download = `epiciclos_proyecto_${Date.now()}.json`;
     a.click();
   };
 
@@ -441,9 +450,16 @@ function App() {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
-          const loadedPoints = JSON.parse(e.target.result);
-          if (Array.isArray(loadedPoints)) {
-            commitPoints(loadedPoints);
+          const loaded = JSON.parse(e.target.result);
+          if (loaded && loaded.layers && Array.isArray(loaded.layers)) {
+            commitLayers(loaded.layers);
+            setActiveLayerId(loaded.layers[0]?.id || 'layer-1');
+          } else if (Array.isArray(loaded)) {
+            // Compatibilidad hacia atrás con archivos de puntos antiguos
+            const newLayer = createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8');
+            newLayer.points = loaded;
+            commitLayers([newLayer]);
+            setActiveLayerId('layer-1');
           }
         } catch (err) {
           alert("Error al leer el archivo JSON.");
@@ -470,10 +486,15 @@ function App() {
         setMode={setMode}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        layers={layers}
+        activeLayerId={activeLayerId}
+        setActiveLayerId={setActiveLayerId}
+        onAddLayer={handleAddLayer}
+        onUpdateLayer={handleUpdateLayer}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
-        canRedo={historyIndex < pointsHistory.length - 1}
+        canRedo={historyIndex < layersHistory.length - 1}
         onClear={handleClear}
         onZoomIn={() => canvasStageRef.current?.zoomIn()}
         onZoomOut={() => canvasStageRef.current?.zoomOut()}
@@ -500,26 +521,15 @@ function App() {
           mode={mode}
           activeTab={activeTab}
           bgImage={bgImage}
-          points={points}
-          commitPoints={commitPoints}
-          origin={origin}
-          setOrigin={(newOrigin) => {
-            setOrigin(newOrigin);
-            setManualOrigin(true);
-          }}
-          fourier={fourier}
+          layers={computedLayers}
+          activeLayerId={activeLayerId}
+          commitLayerPoints={commitLayerPoints}
+          setLayerOrigin={setLayerOrigin}
           time={time}
-          path={path}
           stageRef={stageRef}
           isRecording={isRecording}
-          epicycleColor={epicycleColor}
-          pathColor={pathColor}
-          epicycleThickness={epicycleThickness}
-          pathThickness={pathThickness}
           pointSize={pointSize}
           snapRadius={snapRadius}
-          epicycleShape={epicycleShape}
-          customRotorShape={customRotorShape}
           recordingBox={recordingBox}
           setRecordingBox={setRecordingBox}
           showRecordingBox={showRecordingBox}
@@ -528,12 +538,12 @@ function App() {
         {!isRecording && (
           <div className="status-bar">
             {activeTab !== 'draw' && 'Desplazamiento — Arrastra con el dedo para mover el lienzo'}
-            {activeTab === 'draw' && mode === 'draw-pencil' && 'Lápiz — Arrastra para dibujar'}
-            {activeTab === 'draw' && mode === 'draw-line' && 'Línea — Clic para crear puntos'}
-            {activeTab === 'draw' && mode === 'draw-curve' && 'Curva — Clic para crear puntos suaves'}
-            {activeTab === 'draw' && mode === 'edit' && 'Edición — Arrastra los puntos'}
-            {activeTab === 'draw' && mode === 'moveOrigin' && 'Arrastra el punto verde (centro)'}
-            {activeTab === 'draw' && mode === 'pan' && 'Arrastra para mover • Scroll para zoom'}
+            {activeTab === 'draw' && mode === 'draw-pencil' && `Lápiz — Dibujando en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'draw-line' && `Línea Recta — Clic para crear puntos en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'draw-curve' && `Curva Spline — Clic para crear puntos suaves en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'edit' && `Edición — Arrastra los puntos de ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'moveOrigin' && `Centro — Arrastra el punto de origen de ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'pan' && 'Arrastra para mover • Scroll/Pinch para zoom'}
           </div>
         )}
       </div>
@@ -575,15 +585,18 @@ function App() {
         onToggleDevPremium={() => setDevPremiumToggle(prev => !prev)}
         onLoginClick={() => setShowAuth(true)}
         onLogout={() => supabase.auth.signOut()}
-        currentPoints={points}
-        onLoadProject={(pts) => { 
-          setPath([]); 
-          setFourier([]); 
+        layers={computedLayers}
+        activeLayerId={activeLayerId}
+        setActiveLayerId={setActiveLayerId}
+        onAddLayer={handleAddLayer}
+        onDeleteLayer={handleDeleteLayer}
+        onUpdateLayer={handleUpdateLayer}
+        onLoadProject={(loadedLayers) => { 
+          setLayerPaths({}); 
           setIsAnimating(false);
-          const newHistory = pointsHistory.slice(0, historyIndex + 1);
-          newHistory.push(pts);
-          setPointsHistory(newHistory);
-          setHistoryIndex(newHistory.length - 1);
+          if (Array.isArray(loadedLayers)) {
+            commitLayers(loadedLayers);
+          }
         }}
         mode={mode}
         setMode={setMode}
@@ -593,22 +606,12 @@ function App() {
         isAnimating={isAnimating}
         animationSpeed={animationSpeed}
         setAnimationSpeed={setAnimationSpeed}
-        epicycleColor={epicycleColor}
-        setEpicycleColor={setEpicycleColor}
-        pathColor={pathColor}
-        setPathColor={setPathColor}
-        epicycleThickness={epicycleThickness}
-        setEpicycleThickness={setEpicycleThickness}
-        pathThickness={pathThickness}
-        setPathThickness={setPathThickness}
         pathScale={pathScale}
         setPathScale={setPathScale}
         snapRadius={snapRadius}
         setSnapRadius={setSnapRadius}
         pointSize={pointSize}
         setPointSize={setPointSize}
-        epicycleShape={epicycleShape}
-        setEpicycleShape={setEpicycleShape}
         customRotorShape={customRotorShape}
         setCustomRotorShape={setCustomRotorShape}
         exportQuality={exportQuality}
@@ -622,7 +625,7 @@ function App() {
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
-        canRedo={historyIndex < pointsHistory.length - 1}
+        canRedo={historyIndex < layersHistory.length - 1}
         onSavePoints={handleSavePoints}
         onLoadPoints={handleLoadPoints}
         onStartRenderVideo={handleStartRenderVideo}

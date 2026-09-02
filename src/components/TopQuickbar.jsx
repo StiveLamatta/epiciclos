@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   PenTool, Minus, Spline, MousePointer2, Move, Crosshair, 
   Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw, 
-  Play, Square, Video, Trash2 
+  Play, Square, Video, Trash2, Plus, Layers
 } from 'lucide-react';
 
 export default function TopQuickbar({
@@ -10,6 +10,11 @@ export default function TopQuickbar({
   setMode,
   activeTab,
   setActiveTab,
+  layers = [],
+  activeLayerId,
+  setActiveLayerId,
+  onAddLayer,
+  onUpdateLayer,
   onUndo,
   onRedo,
   canUndo,
@@ -26,15 +31,58 @@ export default function TopQuickbar({
   onStartRenderVideo,
   topOffset = 8
 }) {
+  const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
+
   return (
     <div className="top-quickbar-container" style={{ '--quickbar-top': `${topOffset}px` }}>
       <div className="top-quickbar glass-panel">
-        {/* Herramientas de dibujo */}
+        {/* Selector Rápido de Capa / Traza */}
+        {layers.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <select
+              value={activeLayer.id}
+              onChange={(e) => setActiveLayerId(e.target.value)}
+              className="quick-btn"
+              style={{
+                background: 'rgba(56, 189, 248, 0.2)',
+                border: '1px solid #38bdf8',
+                color: '#38bdf8',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                outline: 'none',
+                padding: '4px 8px'
+              }}
+            >
+              {layers.map((l, i) => (
+                <option key={l.id} value={l.id} style={{ background: '#0f172a', color: '#fff' }}>
+                  {l.name || `Trazo ${i + 1}`} ({l.points?.length || 0}p)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <button
+          className="quick-btn"
+          onClick={onAddLayer}
+          title="Añadir Nueva Traza / Capa"
+          style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}
+        >
+          <Plus size={15} />
+          <span>Traza</span>
+        </button>
+
+        <div className="quickbar-divider" />
+
+        {/* Herramientas de dibujo para la traza activa */}
         <button
           className={`quick-btn ${mode === 'draw-pencil' && activeTab === 'draw' ? 'active' : ''}`}
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-pencil');
+            if (activeLayer.id && onUpdateLayer) {
+              onUpdateLayer(activeLayer.id, { drawType: 'pencil' });
+            }
           }}
           title="Lápiz Libre"
         >
@@ -47,6 +95,9 @@ export default function TopQuickbar({
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-line');
+            if (activeLayer.id && onUpdateLayer) {
+              onUpdateLayer(activeLayer.id, { drawType: 'line' });
+            }
           }}
           title="Líneas Rectas"
         >
@@ -59,8 +110,11 @@ export default function TopQuickbar({
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-curve');
+            if (activeLayer.id && onUpdateLayer) {
+              onUpdateLayer(activeLayer.id, { drawType: 'curve' });
+            }
           }}
-          title="Curvas Suaves"
+          title="Curvas Suaves (Spline)"
         >
           <Spline size={16} />
           <span>Curva</span>
