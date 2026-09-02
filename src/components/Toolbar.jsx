@@ -3,7 +3,7 @@ import {
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
-  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus
+  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -95,67 +95,78 @@ export default function Toolbar({
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0 }}>Modo de Trazo ({activeLayer.name || 'Trazo 1'})</h3>
-                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                  {activeLayer.points?.length || 0} pts
+                <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {activeLayer.points?.length || 0} puntos
                 </span>
               </div>
               
               <div className="button-row">
                 <button 
                   className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} 
-                  onClick={() => {
-                    setMode('draw-pencil');
-                    onUpdateLayer(activeLayer.id, { drawType: 'pencil' });
-                  }} 
+                  onClick={() => setMode('draw-pencil')} 
                   title="Lápiz Libre"
                 >
-                  <PenTool size={18} />
+                  <PenTool size={16} /> Lápiz
                 </button>
                 <button 
                   className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} 
-                  onClick={() => {
-                    setMode('draw-line');
-                    onUpdateLayer(activeLayer.id, { drawType: 'line' });
-                  }} 
+                  onClick={() => setMode('draw-line')} 
                   title="Línea Recta"
                 >
-                  <Minus size={18} />
+                  <Minus size={16} /> Línea
                 </button>
                 <button 
                   className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} 
-                  onClick={() => {
-                    setMode('draw-curve');
-                    onUpdateLayer(activeLayer.id, { drawType: 'curve' });
-                  }} 
+                  onClick={() => setMode('draw-curve')} 
                   title="Curva Suave (Spline)"
                 >
-                  <Spline size={18} />
+                  <Spline size={16} /> Curva
                 </button>
               </div>
+            </div>
+
+            {/* Control de Radio de Unión / Imán */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+                  <Magnet size={14} color="#38bdf8" /> Radio de Unión / Imán
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {snapRadius > 0 ? `${snapRadius}px` : 'Off'}
+                </span>
+              </div>
+              <input 
+                type="range" min="0" max="40" step="2" 
+                value={snapRadius} 
+                onChange={(e) => setSnapRadius(parseInt(e.target.value))} 
+              />
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                Si tocas dentro de este radio, el trazo se unirá automáticamente al punto cercano.
+              </p>
             </div>
 
             <div className="control-group">
               <h3>Herramientas</h3>
               <div className="button-row">
                 <button className={`btn icon-btn ${mode === 'edit' ? 'active' : ''}`} onClick={() => setMode('edit')} title="Editar Puntos">
-                  <MousePointer2 size={18} />
+                  <MousePointer2 size={16} /> Editar
                 </button>
                 <button className={`btn icon-btn ${mode === 'pan' ? 'active' : ''}`} onClick={() => setMode('pan')} title="Mover Lienzo">
-                  <Move size={18} />
+                  <Move size={16} /> Mover
                 </button>
                 <button className={`btn icon-btn ${mode === 'moveOrigin' ? 'active' : ''}`} onClick={() => setMode('moveOrigin')} title="Mover Centro">
-                  <Crosshair size={18} />
+                  <Crosshair size={16} /> Centro
                 </button>
               </div>
               <div className="button-row" style={{ marginTop: '8px' }}>
                 <button className="btn icon-btn" onClick={onUndo} disabled={!canUndo} title="Deshacer (Ctrl+Z)">
-                  <Undo2 size={18} />
+                  <Undo2 size={16} /> Deshacer
                 </button>
                 <button className="btn icon-btn" onClick={onRedo} disabled={!canRedo} title="Rehacer (Ctrl+Y)">
-                  <Redo2 size={18} />
+                  <Redo2 size={16} /> Rehacer
                 </button>
                 <button className="btn icon-btn danger" onClick={onClear} title="Borrar Todo">
-                  <Trash2 size={18} />
+                  <Trash2 size={16} /> Borrar
                 </button>
               </div>
             </div>
@@ -166,19 +177,19 @@ export default function Toolbar({
         return (
           <div className="toolbar-sections">
             <div className="control-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0 }}>Trazas / Capas ({layers.length})</h3>
                 <button 
                   type="button" 
                   className="btn primary" 
-                  style={{ padding: '5px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                   onClick={onAddLayer}
                 >
                   <Plus size={14} /> Nueva Traza
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                 {layers.map((layer, idx) => {
                   const isActive = layer.id === activeLayer.id;
                   return (
@@ -199,8 +210,8 @@ export default function Toolbar({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                         <div 
                           style={{
-                            width: '12px',
-                            height: '12px',
+                            width: '10px',
+                            height: '10px',
                             borderRadius: '50%',
                             background: layer.pathColor || '#38bdf8'
                           }} 
@@ -208,10 +219,7 @@ export default function Toolbar({
                         <span style={{ fontSize: '0.82rem', fontWeight: isActive ? 'bold' : 'normal', color: isActive ? '#38bdf8' : '#f1f5f9' }}>
                           {layer.name || `Trazo ${idx + 1}`}
                         </span>
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>
-                          {layer.drawType === 'curve' ? '〰️ Curva' : (layer.drawType === 'line' ? '➖ Recta' : '✏️ Lápiz')}
-                        </span>
-                        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                        <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
                           {layer.points?.length || 0} pts
                         </span>
                       </div>
@@ -220,27 +228,27 @@ export default function Toolbar({
                         <button
                           type="button"
                           className="btn icon-btn"
-                          style={{ padding: '4px', width: '28px', height: '28px' }}
+                          style={{ padding: '3px', width: '26px', height: '26px' }}
                           onClick={(e) => {
                             e.stopPropagation();
                             onUpdateLayer(layer.id, { visible: !layer.visible });
                           }}
                           title={layer.visible ? 'Ocultar' : 'Mostrar'}
                         >
-                          {layer.visible ? <Eye size={14} /> : <EyeOff size={14} color="#64748b" />}
+                          {layer.visible ? <Eye size={13} /> : <EyeOff size={13} color="#64748b" />}
                         </button>
                         {layers.length > 1 && (
                           <button
                             type="button"
                             className="btn icon-btn danger"
-                            style={{ padding: '4px', width: '28px', height: '28px' }}
+                            style={{ padding: '3px', width: '26px', height: '26px' }}
                             onClick={(e) => {
                               e.stopPropagation();
                               onDeleteLayer(layer.id);
                             }}
                             title="Eliminar Traza"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                           </button>
                         )}
                       </div>
@@ -250,7 +258,7 @@ export default function Toolbar({
               </div>
             </div>
 
-            {/* Manipulación de epiciclos de la capa seleccionada */}
+            {/* Slider de Epiciclos de la capa seleccionada */}
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3>Epiciclos de {activeLayer.name}</h3>
@@ -271,7 +279,7 @@ export default function Toolbar({
                 }}
                 disabled={activeFourierLength === 0}
               />
-              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
                 Ajusta cuántos armónicos de Fourier componen esta traza.
               </p>
             </div>
@@ -308,7 +316,7 @@ export default function Toolbar({
                   <button
                     key={item.id}
                     type="button"
-                    className={`btn ${activeLayer.epicycleShape === item.id ? 'primary' : ''}`}
+                    className={`btn ${activeLayer.epicycleShape === item.id ? 'active' : ''}`}
                     style={{
                       padding: '8px 4px',
                       display: 'flex',
@@ -325,7 +333,7 @@ export default function Toolbar({
                       }
                     }}
                   >
-                    <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                    <span style={{ fontSize: '1rem' }}>{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
                 ))}
@@ -357,7 +365,7 @@ export default function Toolbar({
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <h3>Grosor de Epiciclos</h3>
-                <span>{activeLayer.epicycleThickness || 1}px</span>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8' }}>{activeLayer.epicycleThickness || 1}px</span>
               </div>
               <input 
                 type="range" min="0.5" max="5" step="0.5" 
@@ -365,9 +373,9 @@ export default function Toolbar({
                 onChange={(e) => onUpdateLayer(activeLayer.id, { epicycleThickness: parseFloat(e.target.value) })} 
               />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                 <h3>Grosor del Trazo</h3>
-                <span>{activeLayer.pathThickness || 3}px</span>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8' }}>{activeLayer.pathThickness || 3}px</span>
               </div>
               <input 
                 type="range" min="1" max="10" step="0.5" 
@@ -384,10 +392,10 @@ export default function Toolbar({
             <div className="control-group">
               <button 
                 className={`btn ${isAnimating ? 'danger' : 'primary'} w-full`} 
-                style={{ padding: '12px', fontSize: '0.9rem', fontWeight: 'bold' }}
+                style={{ padding: '12px', fontSize: '0.88rem', fontWeight: 'bold' }}
                 onClick={onToggleAnimation}
               >
-                {isAnimating ? <Square size={18} /> : <Play size={18} />}
+                {isAnimating ? <Square size={16} /> : <Play size={16} />}
                 {isAnimating ? 'Pausar Simulación' : 'Iniciar Simulación'}
               </button>
             </div>
@@ -395,7 +403,7 @@ export default function Toolbar({
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <h3>Velocidad de Animación</h3>
-                <span>{animationSpeed}x</span>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8' }}>{animationSpeed}x</span>
               </div>
               <input 
                 type="range" min="0.1" max="5" step="0.1" 
@@ -408,7 +416,7 @@ export default function Toolbar({
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3>Cantidad de Epiciclos ({activeLayer.name})</h3>
-                <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 'bold' }}>
                   {activeLayer.numEpicycles > 0 && activeLayer.numEpicycles < activeFourierLength 
                     ? `${activeLayer.numEpicycles} / ${activeFourierLength}` 
                     : `Todos (${activeFourierLength})`}
@@ -448,8 +456,8 @@ export default function Toolbar({
                     >
                       <span style={{ fontWeight: isSelected ? 'bold' : 'normal' }}>{item.label}</span>
                       <span style={{
-                        fontSize: '0.7rem',
-                        padding: '2px 6px',
+                        fontSize: '0.68rem',
+                        padding: '2px 5px',
                         borderRadius: '4px',
                         background: item.unlocked ? (item.badge.includes('Premium') ? 'rgba(234, 179, 8, 0.2)' : 'rgba(16, 185, 129, 0.2)') : 'rgba(239, 68, 68, 0.2)',
                         color: item.unlocked ? (item.badge.includes('Premium') ? '#facc15' : '#34d399') : '#f87171'
@@ -464,15 +472,15 @@ export default function Toolbar({
 
             <div className="control-group">
               <h3>Renderizado 60 FPS (Sin Lag)</h3>
-              <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: '0 0 10px 0', lineHeight: '1.35' }}>
+              <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '0 0 8px 0', lineHeight: '1.35' }}>
                 Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano con todas las trazas.
               </p>
               
               <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
                 <button 
                   type="button" 
-                  className={`btn ${showRecordingBox ? 'primary' : ''}`}
-                  style={{ flex: 1, padding: '8px', fontSize: '0.75rem' }}
+                  className={`btn ${showRecordingBox ? 'active' : ''}`}
+                  style={{ flex: 1, padding: '7px', fontSize: '0.74rem' }}
                   onClick={() => setShowRecordingBox && setShowRecordingBox(prev => !prev)}
                 >
                   <Crop size={14} /> {showRecordingBox ? 'Ocultar Marco' : 'Ajustar Marco'}
@@ -488,7 +496,7 @@ export default function Toolbar({
                   if (onStartRenderVideo) onStartRenderVideo();
                 }}
               >
-                <Sparkles size={16} />
+                <Sparkles size={15} />
                 {isRenderingVideo ? 'Cancelar Renderizado' : `Renderizar Video 60 FPS (${exportQuality.toUpperCase()})`}
               </button>
             </div>
@@ -496,20 +504,20 @@ export default function Toolbar({
             <div className="control-group">
               <h3>Grabación en Tiempo Real</h3>
               <button className={`btn ${isRecording ? 'danger' : ''} w-full`} onClick={handleRecordClick}>
-                <Video size={18} />
+                <Video size={16} />
                 {isRecording ? 'Detener Grabación' : `Grabar Pantalla`}
               </button>
               
               {(recordingUrl || recordingMp4Url) && (
-                <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                   {recordingMp4Url && (
-                    <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary" style={{ flex: 1, padding: '8px', fontSize: '0.78rem' }}>
-                      <Download size={14} /> .MP4
+                    <button onClick={() => handleDownloadClick(recordingMp4Url, 'mp4')} className="btn primary" style={{ flex: 1, padding: '7px', fontSize: '0.76rem' }}>
+                      <Download size={13} /> .MP4
                     </button>
                   )}
                   {recordingUrl && (
-                    <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn" style={{ flex: 1, padding: '8px', fontSize: '0.78rem' }}>
-                      <Download size={14} /> .WebM
+                    <button onClick={() => handleDownloadClick(recordingUrl, 'webm')} className="btn" style={{ flex: 1, padding: '7px', fontSize: '0.76rem' }}>
+                      <Download size={13} /> .WebM
                     </button>
                   )}
                 </div>
@@ -542,10 +550,10 @@ export default function Toolbar({
               <h3>Archivos Locales</h3>
               <div className="button-row">
                 <button className="btn icon-btn" onClick={onSavePoints} title="Guardar Proyecto (JSON)">
-                  <Save size={18} /> Guardar
+                  <Save size={16} /> Guardar
                 </button>
                 <label className="btn icon-btn" title="Cargar Proyecto (JSON)" style={{ cursor: 'pointer' }}>
-                  <FolderOpen size={18} /> Cargar
+                  <FolderOpen size={16} /> Cargar
                   <input type="file" accept=".json" onChange={onLoadPoints} style={{ display: 'none' }} />
                 </label>
               </div>
@@ -554,7 +562,7 @@ export default function Toolbar({
             <div className="control-group">
               <h3>Imagen de Fondo</h3>
               <label className="btn file-upload-label w-full">
-                <Upload size={18} /> Subir Imagen Guía
+                <Upload size={16} /> Subir Imagen Guía
                 <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
               </label>
             </div>

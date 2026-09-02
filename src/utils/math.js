@@ -61,7 +61,7 @@ export function resamplePath(points, spacing = 2) {
  * Calculates the barycenter (centroid) of an array of points.
  */
 export function getBarycenter(points) {
-  if (points.length === 0) return { x: 0, y: 0 };
+  if (!points || points.length === 0) return { x: 0, y: 0 };
   let sumX = 0;
   let sumY = 0;
   for (let p of points) {
@@ -106,7 +106,6 @@ export function generateSpline(points, segments = 16, isClosed = false) {
     p.push(points[0]);
     p.push(points[1]);
   } else {
-    // Extrapolate virtual endpoints naturally
     const pStart = {
       x: points[0].x - (points[1].x - points[0].x),
       y: points[0].y - (points[1].y - points[0].y)
@@ -132,13 +131,11 @@ export function generateSpline(points, segments = 16, isClosed = false) {
     const t2 = getT(t1, p1, p2);
     const t3 = getT(t2, p2, p3);
 
-    // If points are coincident, skip
     if (Math.abs(t2 - t1) < 1e-5) continue;
 
     for (let s = 0; s < segments; s++) {
       const t = t1 + (s / segments) * (t2 - t1);
 
-      // Barry-Goldman algorithm for centripetal Catmull-Rom
       const a1_x = (t1 - t !== 0 && t1 - t0 !== 0) ? ((t1 - t) / (t1 - t0)) * p0.x + ((t - t0) / (t1 - t0)) * p1.x : p1.x;
       const a1_y = (t1 - t !== 0 && t1 - t0 !== 0) ? ((t1 - t) / (t1 - t0)) * p0.y + ((t - t0) / (t1 - t0)) * p1.y : p1.y;
 
@@ -166,4 +163,64 @@ export function generateSpline(points, segments = 16, isClosed = false) {
   }
 
   return result;
+}
+
+/**
+ * Renderiza un trazo que puede mezclar segmentos rectos y curvas.
+ * Cada punto tiene `{ x, y, isCurve: boolean }`.
+ */
+export function renderMixedPoints(points, segments = 16) {
+  if (!points || points.length === 0) return [];
+  if (points.length < 3) return [...points];
+
+  const hasCurve = points.some(p => p.isCurve === true);
+  if (!hasCurve) return [...points];
+
+  const allCurve = points.every(p => p.isCurve === true);
+  if (allCurve) return generateSpline(points, segments, false);
+
+  const result = [];
+  let currentGroup = [points[0]];
+
+  for (let i = 1; i < points.length; i++) {
+    const prevPt = points[i - 1];
+    const currPt = points[i];
+
+    const isPrevCurve = !!prevPt.isCurve;
+    const isCurrCurve = !!currPt.isCurve;
+
+    if (isPrevCurve === isCurrCurve) {
+      currentGroup.push(currPt);
+    } else {
+      if (isPrevCurve && currentGroup.length >= 2) {
+        const splinePts = generateSpline(currentGroup, segments, false);
+        if (result.length > 0) splinePts.shift();
+        result.push(...splinePts);
+      } else {
+        if (result.length > 0) {
+          result.push(...currentGroup.slice(1));
+        } else {
+          result.push(...currentGroup);
+        }
+      }
+      currentGroup = [prevPt, currPt];
+    }
+  }
+
+  if (currentGroup.length > 0) {
+    const isCurveGroup = !!currentGroup[currentGroup.length - 1].isCurve;
+    if (isCurveGroup && currentGroup.length >= 2) {
+      const splinePts = generateSpline(currentGroup, segments, false);
+      if (result.length > 0) splinePts.shift();
+      result.push(...splinePts);
+    } else {
+      if (result.length > 0) {
+        result.push(...currentGroup.slice(1));
+      } else {
+        result.push(...currentGroup);
+      }
+    }
+  }
+
+  return result.length > 0 ? result : [...points];
 }

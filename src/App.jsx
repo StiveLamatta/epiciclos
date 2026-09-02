@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Toolbar from './components/Toolbar';
 import CanvasStage from './components/CanvasStage';
 import { dft } from './utils/fourier';
-import { resamplePath, getBarycenter, generateSpline } from './utils/math';
+import { resamplePath, getBarycenter, renderMixedPoints } from './utils/math';
 import { supabase } from './lib/supabase';
 import AuthModal from './components/AuthModal';
 import AdBanner from './components/AdBanner';
@@ -123,7 +123,7 @@ function App() {
     animationSpeedRef.current = animationSpeed;
   }, [animationSpeed]);
   
-  // Video Recording State (Grabación clásica)
+  // Video Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState(null);
   const [recordingMp4Url, setRecordingMp4Url] = useState(null);
@@ -214,7 +214,7 @@ function App() {
     commitLayers(nextLayers);
   };
 
-  // CÁLCULO DE FOURIER Y CENTROIDES POR CAPA
+  // CÁLCULO EXACTO DE FOURIER Y CENTROIDES POR CAPA
   const computedLayers = useMemo(() => {
     return layers.map(layer => {
       if (!layer.visible || !layer.points || layer.points.length < 2) {
@@ -227,19 +227,23 @@ function App() {
         };
       }
 
-      // Si el trazo guardado es de tipo curva suave, generar interpolación Catmull-Rom
-      const renderPoints = (layer.drawType === 'curve' && layer.points.length >= 3)
-        ? generateSpline(layer.points, 16, false)
-        : layer.points;
+      // Renderizar trazo con soporte mixto de líneas rectas y curvas suaves
+      const renderPoints = renderMixedPoints(layer.points, 16);
 
       const resampled = resamplePath(renderPoints, 2 * pathScale);
       const layerOrigin = layer.manualOrigin 
         ? layer.origin 
         : getBarycenter(renderPoints);
 
-      const fourier = resampled.length > 1 ? dft(resampled, layerOrigin) : [];
+      // Convertir puntos a números complejos relativos al origen para la DFT
+      const complexSignal = resampled.map(p => ({
+        re: p.x - layerOrigin.x,
+        im: p.y - layerOrigin.y
+      }));
 
-      // Si el usuario especificó cantidad máxima de armónicos/epiciclos
+      const fourier = complexSignal.length > 1 ? dft(complexSignal) : [];
+
+      // Si el usuario especificó cantidad de epiciclos/armónicos
       const effectiveFourier = (layer.numEpicycles > 0 && layer.numEpicycles < fourier.length)
         ? fourier.slice(0, layer.numEpicycles)
         : fourier;
@@ -263,7 +267,6 @@ function App() {
     if (isAnimating && hasAnyFourier) {
       const update = () => {
         setTime((prevTime) => {
-          // Tomar el tamaño de fourier más representativo para dt
           const maxTerms = Math.max(...computedLayers.map(l => l.effectiveFourier?.length || 1), 1);
           const dt = (2 * Math.PI) / maxTerms;
           const nextTime = prevTime + dt * animationSpeedRef.current;
@@ -362,7 +365,7 @@ function App() {
     setRenderProgress(0);
 
     try {
-      const { blob, url } = await renderFourierVideoOffline({
+      const { blob, url, extension } = await renderFourierVideoOffline({
         layers: computedLayers,
         exportQuality,
         recordingBox: showRecordingBox ? recordingBox : null,
@@ -372,8 +375,8 @@ function App() {
       setIsRenderingVideo(false);
       setRecordingUrl(url);
       
-      // Descargar o compartir el video 60 FPS inmediatamente
-      downloadOrShareVideo(url, 'mp4');
+      // Descargar o compartir automáticamente
+      downloadOrShareVideo(url, extension || 'mp4');
     } catch (err) {
       console.error(err);
       alert("Error al renderizar el video: " + (err.message || err));
@@ -455,7 +458,6 @@ function App() {
             commitLayers(loaded.layers);
             setActiveLayerId(loaded.layers[0]?.id || 'layer-1');
           } else if (Array.isArray(loaded)) {
-            // Compatibilidad hacia atrás con archivos de puntos antiguos
             const newLayer = createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8');
             newLayer.points = loaded;
             commitLayers([newLayer]);
@@ -539,8 +541,8 @@ function App() {
           <div className="status-bar">
             {activeTab !== 'draw' && 'Desplazamiento — Arrastra con el dedo para mover el lienzo'}
             {activeTab === 'draw' && mode === 'draw-pencil' && `Lápiz — Dibujando en ${activeLayer.name}`}
-            {activeTab === 'draw' && mode === 'draw-line' && `Línea Recta — Clic para crear puntos en ${activeLayer.name}`}
-            {activeTab === 'draw' && mode === 'draw-curve' && `Curva Spline — Clic para crear puntos suaves en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'draw-line' && `Línea Recta — Clic para añadir puntos en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'draw-curve' && `Curva Spline — Clic para añadir puntos curvos en ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'edit' && `Edición — Arrastra los puntos de ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'moveOrigin' && `Centro — Arrastra el punto de origen de ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'pan' && 'Arrastra para mover • Scroll/Pinch para zoom'}

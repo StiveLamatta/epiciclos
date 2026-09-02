@@ -1,7 +1,7 @@
 import React, { useRef, useState, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Stage, Layer, Image, Line, Circle, Rect, Group } from 'react-konva';
 import useImage from 'use-image';
-import { generateSpline } from '../utils/math';
+import { renderMixedPoints } from '../utils/math';
 
 const CanvasStage = forwardRef(function CanvasStage({
   width,
@@ -85,9 +85,9 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const getSnappedPoint = (pos) => {
-    // Buscar puntos en la capa activa para imantar
+    if (snapRadius <= 0) return pos;
     for (let p of currentPoints) {
-      if (Math.hypot(p.x - pos.x, p.y - pos.y) < snapRadius) {
+      if (Math.hypot(p.x - pos.x, p.y - pos.y) <= snapRadius) {
         return { x: p.x, y: p.y };
       }
     }
@@ -105,9 +105,11 @@ const CanvasStage = forwardRef(function CanvasStage({
 
     if (e.target.className === 'Circle' && (mode === 'edit' || e.target.attrs.name === 'boxHandle')) return; 
 
+    const isCurve = mode === 'draw-curve';
+
     if (mode === 'draw-pencil') {
       setIsDrawing(true);
-      setLocalPoints([...activeLayer.points, { x: rawPos.x, y: rawPos.y }]);
+      setLocalPoints([...activeLayer.points, { x: rawPos.x, y: rawPos.y, isCurve: false }]);
     } else if (mode === 'draw-line' || mode === 'draw-curve') {
       const pos = getSnappedPoint(rawPos);
       if (activeLayer.points.length > 0) {
@@ -116,7 +118,7 @@ const CanvasStage = forwardRef(function CanvasStage({
           return;
         }
       }
-      commitLayerPoints([...activeLayer.points, pos]);
+      commitLayerPoints([...activeLayer.points, { x: pos.x, y: pos.y, isCurve }]);
     }
   };
 
@@ -126,14 +128,14 @@ const CanvasStage = forwardRef(function CanvasStage({
     const pos = getRelativePointerPosition(stage);
     
     if (currentPoints.length === 0) {
-      setLocalPoints([{ x: pos.x, y: pos.y }]);
+      setLocalPoints([{ x: pos.x, y: pos.y, isCurve: false }]);
       return;
     }
     
     const lastPoint = currentPoints[currentPoints.length - 1];
     const dist = Math.hypot(pos.x - lastPoint.x, pos.y - lastPoint.y);
     if (dist > 3) {
-      setLocalPoints([...currentPoints, { x: pos.x, y: pos.y }]);
+      setLocalPoints([...currentPoints, { x: pos.x, y: pos.y, isCurve: false }]);
     }
   };
 
@@ -189,6 +191,7 @@ const CanvasStage = forwardRef(function CanvasStage({
     if (mode === 'edit' && activeTab === 'draw') {
       const newPoints = [...currentPoints];
       newPoints[index] = {
+        ...newPoints[index],
         x: e.target.x(),
         y: e.target.y()
       };
@@ -210,7 +213,7 @@ const CanvasStage = forwardRef(function CanvasStage({
     }
   };
 
-  // Generador de Polígonos regulares
+  // Helpers de formas geométricas
   const getPolygonPoints = (cx, cy, r, theta, sides) => {
     const pts = [];
     for (let k = 0; k < sides; k++) {
@@ -220,7 +223,6 @@ const CanvasStage = forwardRef(function CanvasStage({
     return pts;
   };
 
-  // Generador de Estrellas
   const getStarPoints = (cx, cy, r, theta, points = 5) => {
     const pts = [];
     const innerR = r * 0.42;
@@ -233,7 +235,6 @@ const CanvasStage = forwardRef(function CanvasStage({
     return pts;
   };
 
-  // Generador de Corazón
   const getHeartPoints = (cx, cy, r, theta, samples = 25) => {
     const pts = [];
     const cosT = Math.cos(theta);
@@ -266,7 +267,6 @@ const CanvasStage = forwardRef(function CanvasStage({
     return pts;
   };
 
-  // Generador de Forma Libre personalizada
   const getCustomShapePoints = (cx, cy, r, theta, relativePts) => {
     if (!relativePts || relativePts.length === 0) return [];
     const cosT = Math.cos(theta);
@@ -368,7 +368,7 @@ const CanvasStage = forwardRef(function CanvasStage({
           />
         )}
         
-        {/* Renderizado de trazos dibujados de cada capa */}
+        {/* Renderizado de trazos dibujados de cada capa (soporta mezcla de rectas y curvas) */}
         {!isRecording && layers.map((layer) => {
           if (layer.visible === false) return null;
           
@@ -376,11 +376,7 @@ const CanvasStage = forwardRef(function CanvasStage({
           const rawPts = isCurrentActive ? currentPoints : (layer.points || []);
           if (rawPts.length === 0) return null;
 
-          // Si el tipo guardado del trazo es 'curve', siempre interpolar spline centripetal
-          const ptsToRender = (layer.drawType === 'curve' && rawPts.length >= 3)
-            ? generateSpline(rawPts, 16, false)
-            : rawPts;
-
+          const ptsToRender = renderMixedPoints(rawPts, 16);
           const flatPoints = ptsToRender.flatMap(p => [p.x, p.y]);
 
           return (
@@ -396,16 +392,17 @@ const CanvasStage = forwardRef(function CanvasStage({
           );
         })}
 
-        {/* Puntos de edición de la capa activa */}
+        {/* Puntos de edición y anillos de radio de imantación */}
         {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => (
           <React.Fragment key={`pt-${i}`}>
-            {(mode === 'draw-line' || mode === 'draw-curve') && (
+            {snapRadius > 0 && (mode === 'draw-line' || mode === 'draw-curve') && (
               <Circle
                 x={p.x}
                 y={p.y}
                 radius={snapRadius}
-                stroke="rgba(16, 185, 129, 0.4)"
+                stroke="rgba(16, 185, 129, 0.45)"
                 strokeWidth={1 / stageScale}
+                dash={[3 / stageScale, 3 / stageScale]}
                 listening={false}
               />
             )}
@@ -413,8 +410,10 @@ const CanvasStage = forwardRef(function CanvasStage({
               x={p.x}
               y={p.y}
               radius={(draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)) / stageScale}
-              fill={draggedPointIndex === i ? "#fff" : "#f59e0b"}
-              shadowColor={draggedPointIndex === i ? "#f59e0b" : "transparent"}
+              fill={draggedPointIndex === i ? "#fff" : (p.isCurve ? "#38bdf8" : "#f59e0b")}
+              stroke="#ffffff"
+              strokeWidth={1 / stageScale}
+              shadowColor={draggedPointIndex === i ? "#38bdf8" : "transparent"}
               shadowBlur={draggedPointIndex === i ? 10 : 0}
               draggable={mode === 'edit'}
               onDragStart={(e) => handlePointDragStart(e, i)}
