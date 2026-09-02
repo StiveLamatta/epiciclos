@@ -11,6 +11,7 @@ import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
 import CustomRotorModal from './CustomRotorModal';
 import { downloadOrShareVideo } from '../services/downloader';
+import { isNative } from '../services/platform';
 
 const TABS = [
   { id: 'draw',      label: 'Dibujo',     icon: Pencil },
@@ -69,7 +70,7 @@ export default function Toolbar({
       alert("Error: No tienes conexión a internet para continuar.");
       return;
     }
-    if (isPremium) {
+    if (isPremium || !isNative()) {
       downloadOrShareVideo(url, extension);
     } else {
       setPendingDownload({ url, extension });
