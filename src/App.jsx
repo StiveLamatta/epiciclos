@@ -20,12 +20,14 @@ const createDefaultLayer = (id = 'layer-1', name = 'Trazo 1', color = '#38bdf8')
   drawType: 'pencil', // 'pencil' | 'line' | 'curve'
   epicycleShape: 'circle',
   customRotorShape: null,
-  epicycleColor: '#3b82f6',
-  pathColor: color,
+  strokeColor: '#f59e0b', // Color del trazo dibujado
+  epicycleColor: '#3b82f6', // Color de los rotores y líneas de Fourier
+  pathColor: color, // Color de la estela animada que dibuja Fourier
   epicycleThickness: 1,
   pathThickness: 3,
   numEpicycles: 0, // 0 = todos
   visible: true,
+  isClosed: false, // Si los puntos inicial y final están unidos
   origin: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
   manualOrigin: false
 });
@@ -110,6 +112,7 @@ function App() {
   const [time, setTime] = useState(0);
   const [layerPaths, setLayerPaths] = useState({});
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showEpicyclesPreview, setShowEpicyclesPreview] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [pointSize, setPointSize] = useState(3);
   const [pathScale, setPathScale] = useState(1);
@@ -194,6 +197,13 @@ function App() {
     commitLayers(nextLayers);
   };
 
+  const handleToggleClosePath = (layerId) => {
+    const targetLayer = layers.find(l => l.id === layerId);
+    if (targetLayer) {
+      handleUpdateLayer(layerId, { isClosed: !targetLayer.isClosed });
+    }
+  };
+
   const commitLayerPoints = (newPts) => {
     const nextLayers = layers.map(l => {
       if (l.id === activeLayerId) {
@@ -227,8 +237,8 @@ function App() {
         };
       }
 
-      // Renderizar trazo con soporte mixto de líneas rectas y curvas suaves
-      const renderPoints = renderMixedPoints(layer.points, 16);
+      // Renderizar trazo con soporte mixto de líneas rectas y curvas suaves + cierre de loop
+      const renderPoints = renderMixedPoints(layer.points, 16, layer.isClosed);
 
       const resampled = resamplePath(renderPoints, 2 * pathScale);
       const layerOrigin = layer.manualOrigin 
@@ -313,6 +323,7 @@ function App() {
     setLayerPaths({});
     setTime(0);
     setIsAnimating(false);
+    setShowEpicyclesPreview(false);
     setBgImage(null);
   };
 
@@ -375,7 +386,6 @@ function App() {
       setIsRenderingVideo(false);
       setRecordingUrl(url);
       
-      // Descargar o compartir automáticamente
       downloadOrShareVideo(url, extension || 'mp4');
     } catch (err) {
       console.error(err);
@@ -507,6 +517,9 @@ function App() {
         setShowRecordingBox={setShowRecordingBox}
         isRenderingVideo={isRenderingVideo}
         onStartRenderVideo={handleStartRenderVideo}
+        showEpicyclesPreview={showEpicyclesPreview}
+        onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
+        onToggleClosePath={handleToggleClosePath}
         topOffset={isNative() && !effectivePremium ? 64 : 8}
       />
 
@@ -530,6 +543,8 @@ function App() {
           time={time}
           stageRef={stageRef}
           isRecording={isRecording}
+          isAnimating={isAnimating}
+          showEpicyclesPreview={showEpicyclesPreview}
           pointSize={pointSize}
           snapRadius={snapRadius}
           recordingBox={recordingBox}
@@ -634,6 +649,9 @@ function App() {
         isRenderingVideo={isRenderingVideo}
         showRecordingBox={showRecordingBox}
         setShowRecordingBox={setShowRecordingBox}
+        showEpicyclesPreview={showEpicyclesPreview}
+        onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
+        onToggleClosePath={handleToggleClosePath}
       />
       
       {showAuth && (

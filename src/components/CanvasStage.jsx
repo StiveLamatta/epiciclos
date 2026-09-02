@@ -16,6 +16,8 @@ const CanvasStage = forwardRef(function CanvasStage({
   time = 0,
   stageRef,
   isRecording = false,
+  isAnimating = false,
+  showEpicyclesPreview = false,
   pointSize = 3,
   snapRadius = 15,
   recordingBox,
@@ -42,7 +44,7 @@ const CanvasStage = forwardRef(function CanvasStage({
 
   const currentPoints = localPoints || activeLayer.points || [];
 
-  // Exponer métodos de zoom y vista al componente padre
+  // Exponer métodos de zoom y vista
   useImperativeHandle(ref, () => ({
     zoomIn: () => {
       setStageScale(prev => Math.min(prev * 1.3, 10));
@@ -85,7 +87,7 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const getSnappedPoint = (pos) => {
-    if (snapRadius <= 0) return pos;
+    if (snapRadius <= 0 || currentPoints.length === 0) return pos;
     for (let p of currentPoints) {
       if (Math.hypot(p.x - pos.x, p.y - pos.y) <= snapRadius) {
         return { x: p.x, y: p.y };
@@ -109,7 +111,8 @@ const CanvasStage = forwardRef(function CanvasStage({
 
     if (mode === 'draw-pencil') {
       setIsDrawing(true);
-      setLocalPoints([...activeLayer.points, { x: rawPos.x, y: rawPos.y, isCurve: false }]);
+      const pos = getSnappedPoint(rawPos);
+      setLocalPoints([...activeLayer.points, { x: pos.x, y: pos.y, isCurve: false }]);
     } else if (mode === 'draw-line' || mode === 'draw-curve') {
       const pos = getSnappedPoint(rawPos);
       if (activeLayer.points.length > 0) {
@@ -125,16 +128,20 @@ const CanvasStage = forwardRef(function CanvasStage({
   const handleMouseMove = (e) => {
     if (isRecording || !isDrawing || mode !== 'draw-pencil' || activeTab !== 'draw') return;
     const stage = e.target.getStage();
-    const pos = getRelativePointerPosition(stage);
+    const rawPos = getRelativePointerPosition(stage);
     
     if (currentPoints.length === 0) {
-      setLocalPoints([{ x: pos.x, y: pos.y, isCurve: false }]);
+      setLocalPoints([{ x: rawPos.x, y: rawPos.y, isCurve: false }]);
       return;
     }
     
     const lastPoint = currentPoints[currentPoints.length - 1];
-    const dist = Math.hypot(pos.x - lastPoint.x, pos.y - lastPoint.y);
+    const dist = Math.hypot(rawPos.x - lastPoint.x, rawPos.y - lastPoint.y);
     if (dist > 3) {
+      const pos = (currentPoints.length > 10 && snapRadius > 0 && Math.hypot(rawPos.x - currentPoints[0].x, rawPos.y - currentPoints[0].y) <= snapRadius)
+        ? { x: currentPoints[0].x, y: currentPoints[0].y }
+        : rawPos;
+
       setLocalPoints([...currentPoints, { x: pos.x, y: pos.y, isCurve: false }]);
     }
   };
@@ -213,7 +220,7 @@ const CanvasStage = forwardRef(function CanvasStage({
     }
   };
 
-  // Helpers de formas geométricas
+  // Helpers de formas geométricas para rotores
   const getPolygonPoints = (cx, cy, r, theta, sides) => {
     const pts = [];
     for (let k = 0; k < sides; k++) {
@@ -281,6 +288,7 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const isPanEnabled = mode === 'pan' || activeTab !== 'draw';
+  const shouldRenderEpicycles = isAnimating || showEpicyclesPreview || mode === 'moveOrigin' || isRecording;
 
   return (
     <Stage
@@ -368,7 +376,7 @@ const CanvasStage = forwardRef(function CanvasStage({
           />
         )}
         
-        {/* Renderizado de trazos dibujados de cada capa (soporta mezcla de rectas y curvas) */}
+        {/* Renderizado de trazos dibujados de cada capa con COLOR PROPIO de dibujo */}
         {!isRecording && layers.map((layer) => {
           if (layer.visible === false) return null;
           
@@ -376,14 +384,16 @@ const CanvasStage = forwardRef(function CanvasStage({
           const rawPts = isCurrentActive ? currentPoints : (layer.points || []);
           if (rawPts.length === 0) return null;
 
-          const ptsToRender = renderMixedPoints(rawPts, 16);
+          const ptsToRender = renderMixedPoints(rawPts, 16, layer.isClosed);
           const flatPoints = ptsToRender.flatMap(p => [p.x, p.y]);
+
+          const userStrokeColor = layer.strokeColor || '#f59e0b';
 
           return (
             <Line
               key={`line-${layer.id}`}
               points={flatPoints}
-              stroke={isCurrentActive ? (layer.pathColor || '#ef4444') : 'rgba(255, 255, 255, 0.35)'}
+              stroke={isCurrentActive ? userStrokeColor : 'rgba(255, 255, 255, 0.3)'}
               strokeWidth={(isCurrentActive ? 2.5 : 1.5) / stageScale}
               lineCap="round"
               lineJoin="round"
@@ -393,37 +403,40 @@ const CanvasStage = forwardRef(function CanvasStage({
         })}
 
         {/* Puntos de edición y anillos de radio de imantación */}
-        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => (
-          <React.Fragment key={`pt-${i}`}>
-            {snapRadius > 0 && (mode === 'draw-line' || mode === 'draw-curve') && (
+        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => {
+          const isFirstPoint = i === 0;
+          return (
+            <React.Fragment key={`pt-${i}`}>
+              {snapRadius > 0 && (
+                <Circle
+                  x={p.x}
+                  y={p.y}
+                  radius={snapRadius}
+                  stroke={isFirstPoint ? "rgba(56, 189, 248, 0.6)" : "rgba(16, 185, 129, 0.4)"}
+                  strokeWidth={1 / stageScale}
+                  dash={[3 / stageScale, 3 / stageScale]}
+                  listening={false}
+                />
+              )}
               <Circle
                 x={p.x}
                 y={p.y}
-                radius={snapRadius}
-                stroke="rgba(16, 185, 129, 0.45)"
+                radius={(draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)) / stageScale}
+                fill={draggedPointIndex === i ? "#fff" : (isFirstPoint ? "#38bdf8" : (p.isCurve ? "#a855f7" : "#f59e0b"))}
+                stroke="#ffffff"
                 strokeWidth={1 / stageScale}
-                dash={[3 / stageScale, 3 / stageScale]}
-                listening={false}
+                shadowColor={draggedPointIndex === i ? "#38bdf8" : "transparent"}
+                shadowBlur={draggedPointIndex === i ? 10 : 0}
+                draggable={mode === 'edit'}
+                onDragStart={(e) => handlePointDragStart(e, i)}
+                onDragMove={(e) => handlePointDragMove(e, i)}
+                onDragEnd={handlePointDragEnd}
               />
-            )}
-            <Circle
-              x={p.x}
-              y={p.y}
-              radius={(draggedPointIndex === i ? pointSize + 5 : (mode === 'edit' ? pointSize + 3 : pointSize)) / stageScale}
-              fill={draggedPointIndex === i ? "#fff" : (p.isCurve ? "#38bdf8" : "#f59e0b")}
-              stroke="#ffffff"
-              strokeWidth={1 / stageScale}
-              shadowColor={draggedPointIndex === i ? "#38bdf8" : "transparent"}
-              shadowBlur={draggedPointIndex === i ? 10 : 0}
-              draggable={mode === 'edit'}
-              onDragStart={(e) => handlePointDragStart(e, i)}
-              onDragMove={(e) => handlePointDragMove(e, i)}
-              onDragEnd={handlePointDragEnd}
-            />
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          );
+        })}
 
-        {/* Renderizado de Caminos Trazados y Cadenas de Epiciclos de TODAS las capas visibles */}
+        {/* Renderizado de Caminos Trazados y Cadenas de Epiciclos */}
         {layers.map((layer) => {
           if (layer.visible === false) return null;
 
@@ -441,7 +454,8 @@ const CanvasStage = forwardRef(function CanvasStage({
 
           const epicycleElements = [];
 
-          if (fList && fList.length > 0) {
+          // Solo renderizar la cadena de epiciclos si la simulación está activa, en vista previa o moviendo el centro
+          if (shouldRenderEpicycles && fList && fList.length > 0) {
             let x = lOrigin.x;
             let y = lOrigin.y;
 
@@ -575,7 +589,7 @@ const CanvasStage = forwardRef(function CanvasStage({
 
           return (
             <React.Fragment key={`layer-render-${layer.id}`}>
-              {/* Camino trazado */}
+              {/* Estela animada de Fourier */}
               {flatPath.length > 0 && (
                 <Line
                   points={flatPath}
@@ -586,14 +600,14 @@ const CanvasStage = forwardRef(function CanvasStage({
                   listening={false}
                 />
               )}
-              {/* Epiciclos */}
+              {/* Cadena de Epiciclos */}
               {epicycleElements}
             </React.Fragment>
           );
         })}
 
         {/* Marcador de Origen / Centro de la Capa Activa */}
-        {!isRecording && activeLayer && (
+        {!isRecording && shouldRenderEpicycles && activeLayer && (
           <Circle
             x={activeLayer.origin?.x || width / 2}
             y={activeLayer.origin?.y || height / 2}
@@ -631,7 +645,6 @@ const CanvasStage = forwardRef(function CanvasStage({
               fill="rgba(56, 189, 248, 0.05)"
             />
 
-            {/* Guías de tercios */}
             <Line
               points={[recordingBox.width / 3, 0, recordingBox.width / 3, recordingBox.height]}
               stroke="rgba(56, 189, 248, 0.25)"
@@ -657,7 +670,6 @@ const CanvasStage = forwardRef(function CanvasStage({
               listening={false}
             />
 
-            {/* Manija de esquina */}
             <Circle
               name="boxHandle"
               x={recordingBox.width}

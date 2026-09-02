@@ -166,25 +166,35 @@ export function generateSpline(points, segments = 16, isClosed = false) {
 }
 
 /**
- * Renderiza un trazo que puede mezclar segmentos rectos y curvas.
+ * Renderiza un trazo que puede mezclar segmentos rectos y curvas, con opción de cerrar el trazo.
  * Cada punto tiene `{ x, y, isCurve: boolean }`.
  */
-export function renderMixedPoints(points, segments = 16) {
+export function renderMixedPoints(points, segments = 16, isClosed = false) {
   if (!points || points.length === 0) return [];
-  if (points.length < 3) return [...points];
+  
+  let workingPoints = [...points];
+  if (isClosed && points.length >= 3) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    if (Math.hypot(first.x - last.x, first.y - last.y) > 2) {
+      workingPoints.push({ ...first });
+    }
+  }
 
-  const hasCurve = points.some(p => p.isCurve === true);
-  if (!hasCurve) return [...points];
+  if (workingPoints.length < 3) return workingPoints;
 
-  const allCurve = points.every(p => p.isCurve === true);
-  if (allCurve) return generateSpline(points, segments, false);
+  const hasCurve = workingPoints.some(p => p.isCurve === true);
+  if (!hasCurve) return workingPoints;
+
+  const allCurve = workingPoints.every(p => p.isCurve === true);
+  if (allCurve) return generateSpline(workingPoints, segments, isClosed);
 
   const result = [];
-  let currentGroup = [points[0]];
+  let currentGroup = [workingPoints[0]];
 
-  for (let i = 1; i < points.length; i++) {
-    const prevPt = points[i - 1];
-    const currPt = points[i];
+  for (let i = 1; i < workingPoints.length; i++) {
+    const prevPt = workingPoints[i - 1];
+    const currPt = workingPoints[i];
 
     const isPrevCurve = !!prevPt.isCurve;
     const isCurrCurve = !!currPt.isCurve;
@@ -222,5 +232,5 @@ export function renderMixedPoints(points, segments = 16) {
     }
   }
 
-  return result.length > 0 ? result : [...points];
+  return result.length > 0 ? result : workingPoints;
 }

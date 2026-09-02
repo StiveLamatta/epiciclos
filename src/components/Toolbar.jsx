@@ -3,7 +3,7 @@ import {
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
-  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet
+  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet, CircleDot
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -32,7 +32,8 @@ export default function Toolbar({
   onSavePoints, onLoadPoints, onLoadProject,
   activeTab = 'draw', setActiveTab,
   isDevUser, devPremiumToggle, onToggleDevPremium,
-  onStartRenderVideo, isRenderingVideo, showRecordingBox, setShowRecordingBox
+  onStartRenderVideo, isRenderingVideo, showRecordingBox, setShowRecordingBox,
+  showEpicyclesPreview, onToggleEpicyclesPreview, onToggleClosePath
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
@@ -123,6 +124,19 @@ export default function Toolbar({
                   <Spline size={16} /> Curva
                 </button>
               </div>
+
+              {/* Botón para Unir Punto Inicial con Final */}
+              <div style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className={`btn ${activeLayer.isClosed ? 'active' : ''} w-full`}
+                  style={{ padding: '8px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  onClick={() => onToggleClosePath && onToggleClosePath(activeLayer.id)}
+                >
+                  <CircleDot size={15} />
+                  {activeLayer.isClosed ? 'Figura Cerrada (Puntos Unidos)' : 'Unir Punto Inicial y Final'}
+                </button>
+              </div>
             </div>
 
             {/* Control de Radio de Unión / Imán */}
@@ -141,8 +155,21 @@ export default function Toolbar({
                 onChange={(e) => setSnapRadius(parseInt(e.target.value))} 
               />
               <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
-                Si tocas dentro de este radio, el trazo se unirá automáticamente al punto cercano.
+                Al tocar cerca del primer punto o de otro punto, se unirá magnéticamente.
               </p>
+            </div>
+
+            {/* Vista Previa de Epiciclos */}
+            <div className="control-group">
+              <button
+                type="button"
+                className={`btn ${showEpicyclesPreview ? 'active' : ''} w-full`}
+                style={{ padding: '8px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                onClick={onToggleEpicyclesPreview}
+              >
+                {showEpicyclesPreview ? <Eye size={15} /> : <EyeOff size={15} />}
+                {showEpicyclesPreview ? 'Ocultar Vista Previa de Epiciclos' : 'Mostrar Vista Previa de Epiciclos'}
+              </button>
             </div>
 
             <div className="control-group">
@@ -213,7 +240,7 @@ export default function Toolbar({
                             width: '10px',
                             height: '10px',
                             borderRadius: '50%',
-                            background: layer.pathColor || '#38bdf8'
+                            background: layer.strokeColor || '#f59e0b'
                           }} 
                         />
                         <span style={{ fontSize: '0.82rem', fontWeight: isActive ? 'bold' : 'normal', color: isActive ? '#38bdf8' : '#f1f5f9' }}>
@@ -340,25 +367,34 @@ export default function Toolbar({
               </div>
             </div>
 
+            {/* 3 COLORES INDEPENDIENTES: Trazo de dibujo, Epiciclos, y Estela animada */}
             <div className="control-group">
-              <h3>Colores de {activeLayer.name}</h3>
-              <div className="color-inputs">
-                <label>
-                  <span>Epiciclos:</span>
+              <h3>Colores Personalizados ({activeLayer.name})</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: '6px 10px', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#f1f5f9' }}>✏️ Trazo Dibujado:</span>
+                  <input 
+                    type="color" 
+                    value={activeLayer.strokeColor || '#f59e0b'} 
+                    onChange={(e) => onUpdateLayer(activeLayer.id, { strokeColor: e.target.value })} 
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: '6px 10px', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#f1f5f9' }}>⭕ Epiciclos / Círculos:</span>
                   <input 
                     type="color" 
                     value={activeLayer.epicycleColor || '#3b82f6'} 
                     onChange={(e) => onUpdateLayer(activeLayer.id, { epicycleColor: e.target.value })} 
                   />
-                </label>
-                <label>
-                  <span>Trazo:</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: '6px 10px', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#f1f5f9' }}>✨ Estela Animada:</span>
                   <input 
                     type="color" 
                     value={activeLayer.pathColor || '#38bdf8'} 
                     onChange={(e) => onUpdateLayer(activeLayer.id, { pathColor: e.target.value })} 
                   />
-                </label>
+                </div>
               </div>
             </div>
 

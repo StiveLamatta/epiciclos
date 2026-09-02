@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   PenTool, Minus, Spline, MousePointer2, Move, Crosshair, 
   Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw, 
-  Play, Square, Video, Trash2, Plus, Layers
+  Play, Square, Video, Trash2, Plus, Eye, EyeOff, CircleDot
 } from 'lucide-react';
 
 export default function TopQuickbar({
@@ -29,6 +29,9 @@ export default function TopQuickbar({
   setShowRecordingBox,
   isRenderingVideo,
   onStartRenderVideo,
+  showEpicyclesPreview,
+  onToggleEpicyclesPreview,
+  onToggleClosePath,
   topOffset = 8
 }) {
   const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
@@ -80,9 +83,6 @@ export default function TopQuickbar({
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-pencil');
-            if (activeLayer.id && onUpdateLayer) {
-              onUpdateLayer(activeLayer.id, { drawType: 'pencil' });
-            }
           }}
           title="Lápiz Libre"
         >
@@ -95,9 +95,6 @@ export default function TopQuickbar({
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-line');
-            if (activeLayer.id && onUpdateLayer) {
-              onUpdateLayer(activeLayer.id, { drawType: 'line' });
-            }
           }}
           title="Líneas Rectas"
         >
@@ -110,14 +107,21 @@ export default function TopQuickbar({
           onClick={() => {
             setActiveTab('draw');
             setMode('draw-curve');
-            if (activeLayer.id && onUpdateLayer) {
-              onUpdateLayer(activeLayer.id, { drawType: 'curve' });
-            }
           }}
           title="Curvas Suaves (Spline)"
         >
           <Spline size={16} />
           <span>Curva</span>
+        </button>
+
+        {/* Unir Inicio y Fin (Cerrar Trazo) */}
+        <button
+          className={`quick-btn ${activeLayer.isClosed ? 'active' : ''}`}
+          onClick={() => onToggleClosePath && onToggleClosePath(activeLayer.id)}
+          title="Unir Punto Inicial con Final (Cerrar Trazo)"
+        >
+          <CircleDot size={16} />
+          <span>{activeLayer.isClosed ? 'Cerrado' : 'Cerrar'}</span>
         </button>
 
         <button
@@ -147,10 +151,20 @@ export default function TopQuickbar({
           title="Mover Centro / Origen"
         >
           <Crosshair size={16} />
-          <span>Origen</span>
+          <span>Centro</span>
         </button>
 
         <div className="quickbar-divider" />
+
+        {/* Vista previa de Epiciclos */}
+        <button
+          className={`quick-btn ${showEpicyclesPreview ? 'active' : ''}`}
+          onClick={onToggleEpicyclesPreview}
+          title="Mostrar / Ocultar Vista Previa de Epiciclos"
+        >
+          {showEpicyclesPreview ? <Eye size={16} /> : <EyeOff size={16} />}
+          <span>{showEpicyclesPreview ? 'Ver Epiciclos' : 'Epiciclos'}</span>
+        </button>
 
         {/* Deshacer / Rehacer */}
         <button
