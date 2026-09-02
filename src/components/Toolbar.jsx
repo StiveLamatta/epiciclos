@@ -3,7 +3,8 @@ import {
   Upload, Play, Square, Trash2, Video, PenTool, Move, Download, 
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
-  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet, CircleDot
+  Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet, CircleDot,
+  Sliders, ArrowDownNarrowWide, Split
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -16,6 +17,14 @@ const TABS = [
   { id: 'style',     label: 'Apariencia', icon: Brush },
   { id: 'animate',   label: 'Animación',  icon: Sparkles },
   { id: 'project',   label: 'Proyecto',   icon: FolderOpen },
+];
+
+const SPLIT_PRESETS = [
+  { id: '3,2,1', label: '3k, 2k, 1k (Mayor a menor - Por defecto)' },
+  { id: '1,2,3', label: '1k, 2k, 3k (Menor a mayor)' },
+  { id: '1,1,1', label: '1k, 1k, 1k (Uniforme / 3 partes)' },
+  { id: '4,2,1', label: '4k, 2k, 1k (Binario)' },
+  { id: 'custom', label: 'Personalizado...' }
 ];
 
 export default function Toolbar({
@@ -38,6 +47,7 @@ export default function Toolbar({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [isCustomPreset, setIsCustomPreset] = useState(false);
 
   // Capa activa
   const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
@@ -216,7 +226,7 @@ export default function Toolbar({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
                 {layers.map((layer, idx) => {
                   const isActive = layer.id === activeLayer.id;
                   return (
@@ -285,7 +295,7 @@ export default function Toolbar({
               </div>
             </div>
 
-            {/* Slider de Epiciclos de la capa seleccionada */}
+            {/* Configuración de Estructura de Fourier de la Capa */}
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3>Epiciclos de {activeLayer.name}</h3>
@@ -306,9 +316,19 @@ export default function Toolbar({
                 }}
                 disabled={activeFourierLength === 0}
               />
-              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
-                Ajusta cuántos armónicos de Fourier componen esta traza.
-              </p>
+
+              {/* Ordenar de mayor a menor */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '6px', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                <input 
+                  type="checkbox" 
+                  checked={activeLayer.sortDesc !== false}
+                  onChange={(e) => onUpdateLayer(activeLayer.id, { sortDesc: e.target.checked })}
+                  style={{ accentColor: '#38bdf8', width: '16px', height: '16px' }}
+                />
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ArrowDownNarrowWide size={14} color="#38bdf8" /> Ordenar de mayor a menor radio
+                </span>
+              </label>
             </div>
           </div>
         );
@@ -367,7 +387,7 @@ export default function Toolbar({
               </div>
             </div>
 
-            {/* 3 COLORES INDEPENDIENTES: Trazo de dibujo, Epiciclos, y Estela animada */}
+            {/* 3 COLORES INDEPENDIENTES */}
             <div className="control-group">
               <h3>Colores Personalizados ({activeLayer.name})</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -448,7 +468,7 @@ export default function Toolbar({
               />
             </div>
 
-            {/* Slider de Manipulación de Epiciclos */}
+            {/* Configuración de Estructura de Epiciclos */}
             <div className="control-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3>Cantidad de Epiciclos ({activeLayer.name})</h3>
@@ -469,6 +489,73 @@ export default function Toolbar({
                 }}
                 disabled={activeFourierLength === 0}
               />
+
+              {/* Ordenar de mayor a menor */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '6px', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                <input 
+                  type="checkbox" 
+                  checked={activeLayer.sortDesc !== false}
+                  onChange={(e) => onUpdateLayer(activeLayer.id, { sortDesc: e.target.checked })}
+                  style={{ accentColor: '#38bdf8', width: '16px', height: '16px' }}
+                />
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ArrowDownNarrowWide size={14} color="#38bdf8" /> Ordenar epiciclos de mayor a menor radio
+                </span>
+              </label>
+            </div>
+
+            {/* PARTICIÓN PROPORCIONAL DE LOS N PRIMEROS EPICICLOS */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+                  <Split size={14} color="#38bdf8" /> Partir N Primeros Epiciclos
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {activeLayer.splitCount > 0 ? `${activeLayer.splitCount} epiciclos` : 'Desactivado'}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="10" 
+                step="1" 
+                value={activeLayer.splitCount || 0}
+                onChange={(e) => onUpdateLayer(activeLayer.id, { splitCount: parseInt(e.target.value) })}
+              />
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 6px 0' }}>
+                Divide los círculos grandes en sub-círculos proporcionales articulados.
+              </p>
+
+              {activeLayer.splitCount > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                  <label style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>Secuencia Proporcional de Radios:</label>
+                  <select
+                    value={SPLIT_PRESETS.some(p => p.id === activeLayer.splitSequence) ? activeLayer.splitSequence : 'custom'}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setIsCustomPreset(true);
+                      } else {
+                        setIsCustomPreset(false);
+                        onUpdateLayer(activeLayer.id, { splitSequence: e.target.value });
+                      }
+                    }}
+                  >
+                    {SPLIT_PRESETS.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+
+                  {(isCustomPreset || !SPLIT_PRESETS.some(p => p.id === activeLayer.splitSequence)) && (
+                    <input
+                      type="text"
+                      placeholder="Ej: 3, 2, 1 o 5, 3, 2, 1"
+                      value={activeLayer.splitSequence || '3,2,1'}
+                      onChange={(e) => onUpdateLayer(activeLayer.id, { splitSequence: e.target.value })}
+                      style={{ marginTop: '2px' }}
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="control-group">

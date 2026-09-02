@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Toolbar from './components/Toolbar';
 import CanvasStage from './components/CanvasStage';
-import { dft } from './utils/fourier';
+import { dft, processFourierEpicycles } from './utils/fourier';
 import { resamplePath, getBarycenter, renderMixedPoints } from './utils/math';
 import { supabase } from './lib/supabase';
 import AuthModal from './components/AuthModal';
@@ -26,6 +26,9 @@ const createDefaultLayer = (id = 'layer-1', name = 'Trazo 1', color = '#38bdf8')
   epicycleThickness: 1,
   pathThickness: 3,
   numEpicycles: 0, // 0 = todos
+  sortDesc: true, // Ordenar de mayor a menor radio
+  splitCount: 0, // Cantidad de primeros epiciclos a partir
+  splitSequence: '3,2,1', // Secuencia proporcional (3k, 2k, 1k...)
   visible: true,
   isClosed: false, // Si los puntos inicial y final están unidos
   origin: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
@@ -224,7 +227,7 @@ function App() {
     commitLayers(nextLayers);
   };
 
-  // CÁLCULO EXACTO DE FOURIER Y CENTROIDES POR CAPA
+  // CÁLCULO EXACTO DE FOURIER, ORDENAMIENTO Y PARTICIÓN PROPORCIONAL
   const computedLayers = useMemo(() => {
     return layers.map(layer => {
       if (!layer.visible || !layer.points || layer.points.length < 2) {
@@ -251,7 +254,14 @@ function App() {
         im: p.y - layerOrigin.y
       }));
 
-      const fourier = complexSignal.length > 1 ? dft(complexSignal) : [];
+      const rawFourier = complexSignal.length > 1 ? dft(complexSignal) : [];
+
+      // Aplicar ordenamiento (mayor a menor) y partición proporcional
+      const fourier = processFourierEpicycles(rawFourier, {
+        sortDesc: layer.sortDesc !== false,
+        splitCount: layer.splitCount || 0,
+        splitSequence: layer.splitSequence || '3,2,1'
+      });
 
       // Si el usuario especificó cantidad de epiciclos/armónicos
       const effectiveFourier = (layer.numEpicycles > 0 && layer.numEpicycles < fourier.length)

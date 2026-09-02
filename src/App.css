@@ -246,6 +246,21 @@
   width: 100%;
 }
 
+/* --- INPUTS & SELECTS --- */
+input[type="text"], select {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+input[type="text"]:focus, select:focus {
+  border-color: #38bdf8;
+}
+
 /* --- SLIDERS --- */
 input[type="range"] {
   -webkit-appearance: none;
@@ -614,5 +629,15 @@ input[type="color"]::-webkit-color-swatch {
     touch-action: pan-y !important;
     padding: 14px 16px 30px;
     max-height: calc(65vh - 56px);
+  }
+}
+
+/* Desktop layout rules */
+@media (min-width: 768px) {
+  .top-quickbar-container {
+    right: 360px; /* Centrado exclusivamente sobre el área de canvas */
+  }
+  .desktop-toolbar {
+    margin-top: 0;
   }
 }
