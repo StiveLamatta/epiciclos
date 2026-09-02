@@ -3,7 +3,7 @@ import {
   PenTool, Minus, Spline, MousePointer2, Move, Crosshair, 
   Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw, 
   Play, Square, Video, Trash2, Plus, Eye, EyeOff, CircleDot,
-  Eraser
+  Eraser, Scissors, PlusSquare
 } from 'lucide-react';
 
 export default function TopQuickbar({
@@ -20,7 +20,8 @@ export default function TopQuickbar({
   onRedo,
   canUndo,
   canRedo,
-  onClear,
+  onClearAll,
+  onClearActiveLayer,
   onZoomIn,
   onZoomOut,
   onResetView,
@@ -33,6 +34,7 @@ export default function TopQuickbar({
   showEpicyclesPreview,
   onToggleEpicyclesPreview,
   onToggleClosePath,
+  onDetachPoints,
   onClearPaths,
   topOffset = 8
 }) {
@@ -116,6 +118,19 @@ export default function TopQuickbar({
           <span>Curva</span>
         </button>
 
+        {/* Insertar Puntos */}
+        <button
+          className={`quick-btn ${mode === 'insert-point' && activeTab === 'draw' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('draw');
+            setMode('insert-point');
+          }}
+          title="Insertar Puntos Dentro de la Curva/Línea"
+        >
+          <PlusSquare size={16} />
+          <span>+ Punto</span>
+        </button>
+
         {/* Unir Inicio y Fin (Cerrar Trazo) */}
         <button
           className={`quick-btn ${activeLayer.isClosed ? 'active' : ''}`}
@@ -123,7 +138,17 @@ export default function TopQuickbar({
           title="Unir Punto Inicial con Final (Cerrar Trazo)"
         >
           <CircleDot size={16} />
-          <span>{activeLayer.isClosed ? 'Cerrado' : 'Cerrar'}</span>
+          <span>{activeLayer.isClosed ? 'Cerrado' : 'Unir'}</span>
+        </button>
+
+        {/* Desunir Puntos Coincidentes */}
+        <button
+          className="quick-btn"
+          onClick={() => onDetachPoints && onDetachPoints(activeLayer.id)}
+          title="Desunir / Separar Puntos Coincidentes"
+        >
+          <Scissors size={15} />
+          <span>Desunir</span>
         </button>
 
         <button
@@ -242,8 +267,25 @@ export default function TopQuickbar({
           <span>{isRenderingVideo ? 'Cancel' : 'Video 60fps'}</span>
         </button>
 
-        <button className="quick-btn danger" onClick={onClear} title="Borrar Lienzo">
-          <Trash2 size={16} />
+        {/* Borrar Traza Actual */}
+        <button 
+          className="quick-btn danger" 
+          onClick={onClearActiveLayer} 
+          title={`Borrar solo los puntos de ${activeLayer.name || 'la traza actual'}`}
+        >
+          <Trash2 size={15} />
+          <span>Traza</span>
+        </button>
+
+        {/* Borrar Todo */}
+        <button 
+          className="quick-btn danger" 
+          style={{ background: '#991b1b' }}
+          onClick={onClearAll} 
+          title="Borrar Todo el Proyecto"
+        >
+          <Trash2 size={15} />
+          <span>Todo</span>
         </button>
       </div>
     </div>

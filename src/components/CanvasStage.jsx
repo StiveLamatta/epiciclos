@@ -1,7 +1,7 @@
 import React, { useRef, useState, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Stage, Layer, Image, Line, Circle, Rect, Group } from 'react-konva';
 import useImage from 'use-image';
-import { renderMixedPoints } from '../utils/math';
+import { renderMixedPoints, findClosestSegment } from '../utils/math';
 
 const CanvasStage = forwardRef(function CanvasStage({
   width,
@@ -97,6 +97,8 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const [draggedPointIndex, setDraggedPointIndex] = useState(null);
+  const [coincidentIndices, setCoincidentIndices] = useState([]);
+  const [insertHover, setInsertHover] = useState(null);
 
   const handleMouseDown = (e) => {
     if (isRecording) return;
@@ -106,6 +108,27 @@ const CanvasStage = forwardRef(function CanvasStage({
     const rawPos = getRelativePointerPosition(stage);
 
     if (e.target.className === 'Circle' && (mode === 'edit' || e.target.attrs.name === 'boxHandle')) return; 
+
+    // MODO INSERTAR PUNTOS EN LA CURVA / LÍNEA
+    if (mode === 'insert-point') {
+      const segInfo = findClosestSegment(currentPoints, rawPos, 35);
+      if (segInfo) {
+        const idx = segInfo.segmentIndex;
+        const p1 = currentPoints[idx];
+        const p2 = currentPoints[idx + 1];
+        const isCurve = (p1?.isCurve && p2?.isCurve) || activeLayer.drawType === 'curve';
+
+        const newPts = [...currentPoints];
+        newPts.splice(idx + 1, 0, {
+          x: segInfo.projectedPoint.x,
+          y: segInfo.projectedPoint.y,
+          isCurve
+        });
+        commitLayerPoints(newPts);
+        setInsertHover(null);
+      }
+      return;
+    }
 
     const isCurve = mode === 'draw-curve';
 
@@ -126,9 +149,18 @@ const CanvasStage = forwardRef(function CanvasStage({
   };
 
   const handleMouseMove = (e) => {
-    if (isRecording || !isDrawing || mode !== 'draw-pencil' || activeTab !== 'draw') return;
+    if (isRecording) return;
     const stage = e.target.getStage();
     const rawPos = getRelativePointerPosition(stage);
+
+    // Hover para previsualizar inserción de puntos
+    if (mode === 'insert-point' && activeTab === 'draw') {
+      const segInfo = findClosestSegment(currentPoints, rawPos, 35);
+      setInsertHover(segInfo);
+      return;
+    }
+
+    if (!isDrawing || mode !== 'draw-pencil' || activeTab !== 'draw') return;
     
     if (currentPoints.length === 0) {
       setLocalPoints([{ x: rawPos.x, y: rawPos.y, isCurve: false }]);
@@ -194,26 +226,46 @@ const CanvasStage = forwardRef(function CanvasStage({
     }
   };
 
-  const handlePointDragMove = (e, index) => {
-    if (mode === 'edit' && activeTab === 'draw') {
-      const newPoints = [...currentPoints];
-      newPoints[index] = {
-        ...newPoints[index],
-        x: e.target.x(),
-        y: e.target.y()
-      };
-      setLocalPoints(newPoints);
-    }
-  };
-
   const handlePointDragStart = (e, index) => {
     if (mode === 'edit' && activeTab === 'draw') {
       setDraggedPointIndex(index);
+      const targetPt = currentPoints[index];
+      if (targetPt) {
+        // Encontrar todos los puntos coincidentes / unidos para moverlos juntos
+        const coincident = [];
+        currentPoints.forEach((p, idx) => {
+          if (Math.hypot(p.x - targetPt.x, p.y - targetPt.y) < 2) {
+            coincident.push(idx);
+          }
+        });
+        setCoincidentIndices(coincident);
+      }
+    }
+  };
+
+  const handlePointDragMove = (e, index) => {
+    if (mode === 'edit' && activeTab === 'draw') {
+      const targetX = e.target.x();
+      const targetY = e.target.y();
+
+      const newPoints = [...currentPoints];
+      const indicesToMove = coincidentIndices.length > 0 ? coincidentIndices : [index];
+
+      indicesToMove.forEach(idx => {
+        newPoints[idx] = {
+          ...newPoints[idx],
+          x: targetX,
+          y: targetY
+        };
+      });
+
+      setLocalPoints(newPoints);
     }
   };
 
   const handlePointDragEnd = () => {
     setDraggedPointIndex(null);
+    setCoincidentIndices([]);
     if (mode === 'edit' && localPoints) {
       commitLayerPoints(localPoints);
       setLocalPoints(null);
@@ -402,8 +454,23 @@ const CanvasStage = forwardRef(function CanvasStage({
           );
         })}
 
+        {/* Indicador de Inserción de Puntos Hover */}
+        {!isRecording && mode === 'insert-point' && insertHover && (
+          <Circle
+            x={insertHover.projectedPoint.x}
+            y={insertHover.projectedPoint.y}
+            radius={(pointSize + 5) / stageScale}
+            fill="#38bdf8"
+            stroke="#ffffff"
+            strokeWidth={2 / stageScale}
+            shadowColor="#38bdf8"
+            shadowBlur={14}
+            listening={false}
+          />
+        )}
+
         {/* Puntos de edición con ALUMBRADO ESPECIAL del PRIMER y ÚLTIMO punto */}
-        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode.startsWith('draw')) && currentPoints.map((p, i) => {
+        {!isRecording && activeTab === 'draw' && (mode === 'edit' || mode === 'insert-point' || mode.startsWith('draw')) && currentPoints.map((p, i) => {
           const isFirstPoint = i === 0;
           const isLastPoint = i === currentPoints.length - 1 && currentPoints.length > 1;
 
@@ -413,18 +480,18 @@ const CanvasStage = forwardRef(function CanvasStage({
           let ptShadowBlur = 0;
 
           if (isFirstPoint) {
-            ptFill = "#38bdf8"; // Azul celeste brillante para el inicio
+            ptFill = "#38bdf8";
             ptRadius = pointSize + 4;
             ptShadowColor = "#38bdf8";
             ptShadowBlur = 14;
           } else if (isLastPoint) {
-            ptFill = "#10b981"; // Verde esmeralda brillante para el punto activo final
+            ptFill = "#10b981";
             ptRadius = pointSize + 5;
             ptShadowColor = "#10b981";
             ptShadowBlur = 18;
           }
 
-          if (draggedPointIndex === i) {
+          if (draggedPointIndex === i || coincidentIndices.includes(i)) {
             ptFill = "#ffffff";
             ptRadius = pointSize + 6;
             ptShadowColor = "#38bdf8";
@@ -433,7 +500,7 @@ const CanvasStage = forwardRef(function CanvasStage({
 
           return (
             <React.Fragment key={`pt-${i}`}>
-              {snapRadius > 0 && (
+              {snapRadius > 0 && mode.startsWith('draw') && (
                 <Circle
                   x={p.x}
                   y={p.y}

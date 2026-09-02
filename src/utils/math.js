@@ -58,6 +58,52 @@ export function resamplePath(points, spacing = 2) {
 }
 
 /**
+ * Finds the closest segment in points array to a target pos {x, y}.
+ * Returns { segmentIndex, projectedPoint, distance } or null if beyond maxDist.
+ */
+export function findClosestSegment(points, pos, maxDist = 30) {
+  if (!points || points.length < 2) return null;
+
+  let bestDist = Infinity;
+  let bestIndex = -1;
+  let bestProj = null;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+
+    if (lenSq === 0) continue;
+
+    let t = ((pos.x - a.x) * dx + (pos.y - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const projX = a.x + t * dx;
+    const projY = a.y + t * dy;
+    const dist = Math.hypot(pos.x - projX, pos.y - projY);
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIndex = i;
+      bestProj = { x: projX, y: projY };
+    }
+  }
+
+  if (bestDist <= maxDist && bestIndex !== -1) {
+    return {
+      segmentIndex: bestIndex,
+      projectedPoint: bestProj,
+      distance: bestDist
+    };
+  }
+
+  return null;
+}
+
+/**
  * Calculates the barycenter (centroid) of an array of points.
  */
 export function getBarycenter(points) {
@@ -94,7 +140,6 @@ export function generateSpline(points, segments = 16, isClosed = false) {
     return res;
   }
 
-  // Helper for centripetal parameterization
   const getT = (tPrev, pA, pB, alpha = 0.5) => {
     const dist = Math.hypot(pB.x - pA.x, pB.y - pA.y);
     return tPrev + Math.pow(dist, alpha);

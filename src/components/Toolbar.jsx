@@ -4,7 +4,8 @@ import {
   Undo2, Redo2, Save, MousePointer2, Minus, Palette, Pencil, 
   Spline, Crosshair, FolderOpen, User, Sparkles, Brush, Layers,
   Heart, Shapes, PlusCircle, Crop, Eye, EyeOff, Plus, Magnet, CircleDot,
-  Sliders, ArrowDownNarrowWide, Split, Eraser
+  Sliders, ArrowDownNarrowWide, Split, Eraser, Scissors, CheckSquare, Square as SquareIcon,
+  PlusSquare, Gauge
 } from 'lucide-react';
 import Dashboard from './Dashboard';
 import AdInterstitialModal from './AdInterstitialModal';
@@ -31,9 +32,9 @@ export default function Toolbar({
   isPremium, session, onLoginClick, onLogout,
   layers = [], activeLayerId, setActiveLayerId,
   onAddLayer, onDeleteLayer, onUpdateLayer,
-  mode, setMode, onImageUpload, onClear, onToggleAnimation, isAnimating,
+  mode, setMode, onImageUpload, onClearAll, onClearActiveLayer, onToggleAnimation, isAnimating,
   animationSpeed, setAnimationSpeed,
-  pathScale, setPathScale, pointSize, setPointSize,
+  pathScale, setPathScale, samplingDensity = 1.5, setSamplingDensity, pointSize, setPointSize,
   snapRadius, setSnapRadius,
   customRotorShape, setCustomRotorShape,
   exportQuality = '480p', setExportQuality,
@@ -42,8 +43,9 @@ export default function Toolbar({
   activeTab = 'draw', setActiveTab,
   isDevUser, devPremiumToggle, onToggleDevPremium,
   onStartRenderVideo, isRenderingVideo, showRecordingBox, setShowRecordingBox,
-  showEpicyclesPreview, onToggleEpicyclesPreview, onToggleClosePath,
-  onClearPaths
+  showEpicyclesPreview, onToggleEpicyclesPreview, onToggleClosePath, onDetachPoints,
+  onClearPaths,
+  recordedLayerIds = [], onToggleRecordLayer, onSelectAllRecordLayers, onDeselectAllRecordLayers
 }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(null);
@@ -112,40 +114,57 @@ export default function Toolbar({
                 </span>
               </div>
               
-              <div className="button-row">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                 <button 
                   className={`btn icon-btn ${mode === 'draw-pencil' ? 'active' : ''}`} 
                   onClick={() => setMode('draw-pencil')} 
                   title="Lápiz Libre"
                 >
-                  <PenTool size={16} /> Lápiz
+                  <PenTool size={15} /> Lápiz
                 </button>
                 <button 
                   className={`btn icon-btn ${mode === 'draw-line' ? 'active' : ''}`} 
                   onClick={() => setMode('draw-line')} 
                   title="Línea Recta"
                 >
-                  <Minus size={16} /> Línea
+                  <Minus size={15} /> Línea
                 </button>
                 <button 
                   className={`btn icon-btn ${mode === 'draw-curve' ? 'active' : ''}`} 
                   onClick={() => setMode('draw-curve')} 
                   title="Curva Suave (Spline)"
                 >
-                  <Spline size={16} /> Curva
+                  <Spline size={15} /> Curva
+                </button>
+                <button 
+                  className={`btn icon-btn ${mode === 'insert-point' ? 'active' : ''}`} 
+                  onClick={() => setMode('insert-point')} 
+                  title="Insertar Puntos Dentro de la Curva/Línea"
+                >
+                  <PlusSquare size={15} /> + Punto
                 </button>
               </div>
 
-              {/* Botón para Unir Punto Inicial con Final */}
-              <div style={{ marginTop: '8px' }}>
+              {/* Botones de Unión / Separación de Puntos */}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                 <button
                   type="button"
-                  className={`btn ${activeLayer.isClosed ? 'active' : ''} w-full`}
-                  style={{ padding: '8px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  className={`btn ${activeLayer.isClosed ? 'active' : ''}`}
+                  style={{ flex: 1, padding: '7px', fontSize: '0.74rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                   onClick={() => onToggleClosePath && onToggleClosePath(activeLayer.id)}
                 >
-                  <CircleDot size={15} />
-                  {activeLayer.isClosed ? 'Figura Cerrada (Puntos Unidos)' : 'Unir Punto Inicial y Final'}
+                  <CircleDot size={14} />
+                  {activeLayer.isClosed ? 'Cerrado' : 'Unir Puntas'}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ flex: 1, padding: '7px', fontSize: '0.74rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                  onClick={() => onDetachPoints && onDetachPoints(activeLayer.id)}
+                  title="Desunir / Separar Puntos Coincidentes"
+                >
+                  <Scissors size={14} /> Desunir
                 </button>
               </div>
             </div>
@@ -170,6 +189,26 @@ export default function Toolbar({
               </p>
             </div>
 
+            {/* Densidad y Precisión de Fourier */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+                  <Gauge size={14} color="#38bdf8" /> Precisión / Puntos Fourier
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 'bold' }}>
+                  {samplingDensity <= 0.6 ? 'Ultra (Máx Detalle)' : (samplingDensity <= 1 ? 'Alta' : (samplingDensity <= 2 ? 'Media' : 'Baja'))}
+                </span>
+              </div>
+              <input 
+                type="range" min="0.4" max="4" step="0.2" 
+                value={samplingDensity} 
+                onChange={(e) => setSamplingDensity(parseFloat(e.target.value))} 
+              />
+              <p style={{ fontSize: '0.7rem', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                Mueve a la izquierda para generar cientos de armónicos con exactitud milimétrica.
+              </p>
+            </div>
+
             {/* Vista Previa de Epiciclos */}
             <div className="control-group">
               <button
@@ -184,7 +223,7 @@ export default function Toolbar({
             </div>
 
             <div className="control-group">
-              <h3>Herramientas</h3>
+              <h3>Herramientas de Edición y Borrado</h3>
               <div className="button-row">
                 <button className={`btn icon-btn ${mode === 'edit' ? 'active' : ''}`} onClick={() => setMode('edit')} title="Editar Puntos">
                   <MousePointer2 size={16} /> Editar
@@ -196,6 +235,7 @@ export default function Toolbar({
                   <Crosshair size={16} /> Centro
                 </button>
               </div>
+
               <div className="button-row" style={{ marginTop: '8px' }}>
                 <button className="btn icon-btn" onClick={onUndo} disabled={!canUndo} title="Deshacer (Ctrl+Z)">
                   <Undo2 size={16} /> Deshacer
@@ -203,8 +243,27 @@ export default function Toolbar({
                 <button className="btn icon-btn" onClick={onRedo} disabled={!canRedo} title="Rehacer (Ctrl+Y)">
                   <Redo2 size={16} /> Rehacer
                 </button>
-                <button className="btn icon-btn danger" onClick={onClear} title="Borrar Todo">
-                  <Trash2 size={16} /> Borrar
+              </div>
+
+              {/* Botones independientes de Borrar */}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                <button 
+                  type="button" 
+                  className="btn icon-btn danger" 
+                  style={{ flex: 1, fontSize: '0.74rem', padding: '7px 4px' }}
+                  onClick={onClearActiveLayer} 
+                  title={`Borrar solo los puntos de ${activeLayer.name}`}
+                >
+                  <Trash2 size={14} /> Borrar Traza
+                </button>
+                <button 
+                  type="button" 
+                  className="btn icon-btn danger" 
+                  style={{ flex: 1, fontSize: '0.74rem', padding: '7px 4px', background: '#991b1b' }}
+                  onClick={onClearAll} 
+                  title="Borrar Todo el Proyecto"
+                >
+                  <Trash2 size={14} /> Borrar Todo
                 </button>
               </div>
             </div>
@@ -596,6 +655,65 @@ export default function Toolbar({
               )}
             </div>
 
+            {/* SELECCIÓN DE TRAZAS / CAPAS PARA GRABAR EN VIDEO */}
+            <div className="control-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <h3 style={{ margin: 0 }}>Trazas a Grabar ({recordedLayerIds.length}/{layers.length})</h3>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button 
+                    type="button" 
+                    className="btn" 
+                    style={{ padding: '2px 6px', fontSize: '0.68rem' }}
+                    onClick={onSelectAllRecordLayers}
+                  >
+                    Todas
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn" 
+                    style={{ padding: '2px 6px', fontSize: '0.68rem' }}
+                    onClick={onDeselectAllRecordLayers}
+                  >
+                    Ninguna
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '140px', overflowY: 'auto' }}>
+                {layers.map((l, i) => {
+                  const isChecked = recordedLayerIds.includes(l.id);
+                  return (
+                    <label 
+                      key={`rec-${l.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        background: isChecked ? 'rgba(56, 189, 248, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                        border: `1px solid ${isChecked ? 'rgba(56, 189, 248, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`,
+                        cursor: 'pointer',
+                        fontSize: '0.76rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input 
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => onToggleRecordLayer && onToggleRecordLayer(l.id)}
+                          style={{ accentColor: '#38bdf8', width: '15px', height: '15px' }}
+                        />
+                        <span style={{ color: l.strokeColor || '#f59e0b', fontWeight: 'bold' }}>●</span>
+                        <span style={{ color: '#f1f5f9' }}>{l.name || `Trazo ${i + 1}`}</span>
+                      </div>
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{l.points?.length || 0} pts</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="control-group">
               <h3>Calidad de Exportación</h3>
               <div className="quality-grid">
@@ -634,7 +752,7 @@ export default function Toolbar({
             <div className="control-group">
               <h3>Renderizado 60 FPS (Sin Lag)</h3>
               <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '0 0 8px 0', lineHeight: '1.35' }}>
-                Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano con todas las trazas.
+                Genera un video a <b>60 FPS exactos y fluidos</b> en segundo plano con las trazas seleccionadas.
               </p>
               
               <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>

@@ -108,6 +108,21 @@ function App() {
   const layers = layersHistory[historyIndex] || [];
   const [activeLayerId, setActiveLayerId] = useState('layer-1');
 
+  // Selección de Capas a Grabar en Video
+  const [recordedLayerIds, setRecordedLayerIds] = useState(['layer-1']);
+
+  // Sincronizar nuevas capas con la lista de grabación
+  useEffect(() => {
+    setRecordedLayerIds(prev => {
+      const currentIds = layers.map(l => l.id);
+      const updated = prev.filter(id => currentIds.includes(id));
+      layers.forEach(l => {
+        if (!updated.includes(l.id)) updated.push(l.id);
+      });
+      return updated.length > 0 ? updated : currentIds;
+    });
+  }, [layers.length]);
+
   // Capa activa
   const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || createDefaultLayer();
 
@@ -119,6 +134,7 @@ function App() {
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [pointSize, setPointSize] = useState(3);
   const [pathScale, setPathScale] = useState(1);
+  const [samplingDensity, setSamplingDensity] = useState(1.5); // Spacing: 0.5px (ultra) a 4px (baja)
   const [snapRadius, setSnapRadius] = useState(15);
   const [customRotorShape, setCustomRotorShape] = useState(null);
   const [exportQuality, setExportQuality] = useState('480p');
@@ -184,15 +200,20 @@ function App() {
     const newLayer = createDefaultLayer(newId, `Trazo ${layers.length + 1}`, color);
     commitLayers([...layers, newLayer]);
     setActiveLayerId(newId);
+    setRecordedLayerIds(prev => [...prev, newId]);
   };
 
   const handleDeleteLayer = (layerId) => {
-    if (layers.length <= 1) return;
+    if (layers.length <= 1) {
+      handleClearActiveLayer();
+      return;
+    }
     const nextLayers = layers.filter(l => l.id !== layerId);
     commitLayers(nextLayers);
     if (activeLayerId === layerId) {
       setActiveLayerId(nextLayers[0].id);
     }
+    setRecordedLayerIds(prev => prev.filter(id => id !== layerId));
   };
 
   const handleUpdateLayer = (layerId, patch) => {
@@ -205,6 +226,20 @@ function App() {
     if (targetLayer) {
       handleUpdateLayer(layerId, { isClosed: !targetLayer.isClosed });
     }
+  };
+
+  // Desunir puntos coincidentes / separar inicio y fin
+  const handleDetachPoints = (layerId) => {
+    const targetLayer = layers.find(l => l.id === layerId);
+    if (!targetLayer || !targetLayer.points || targetLayer.points.length < 2) return;
+    
+    const pts = targetLayer.points.map(p => ({ ...p }));
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    if (Math.hypot(first.x - last.x, first.y - last.y) < 2) {
+      pts[pts.length - 1] = { ...last, x: last.x + 10, y: last.y + 10 };
+    }
+    handleUpdateLayer(layerId, { points: pts, isClosed: false });
   };
 
   const commitLayerPoints = (newPts) => {
@@ -233,6 +268,44 @@ function App() {
     setTime(0);
   };
 
+  // Borrar Traza / Capa Actual
+  const handleClearActiveLayer = () => {
+    handleUpdateLayer(activeLayerId, { points: [], isClosed: false });
+    setLayerPaths(prev => {
+      const next = { ...prev };
+      delete next[activeLayerId];
+      return next;
+    });
+  };
+
+  // Borrar Todo / General
+  const handleClearAll = () => {
+    setLayersHistory([[createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8')]]);
+    setHistoryIndex(0);
+    setActiveLayerId('layer-1');
+    setRecordedLayerIds(['layer-1']);
+    setLayerPaths({});
+    setTime(0);
+    setIsAnimating(false);
+    setShowEpicyclesPreview(false);
+    setBgImage(null);
+  };
+
+  // Selección de Capas para Grabación
+  const handleToggleRecordLayer = (layerId) => {
+    setRecordedLayerIds(prev => 
+      prev.includes(layerId) ? prev.filter(id => id !== layerId) : [...prev, layerId]
+    );
+  };
+
+  const handleSelectAllRecordLayers = () => {
+    setRecordedLayerIds(layers.map(l => l.id));
+  };
+
+  const handleDeselectAllRecordLayers = () => {
+    setRecordedLayerIds([]);
+  };
+
   // CÁLCULO EXACTO DE FOURIER, ORDENAMIENTO Y PARTICIÓN PROPORCIONAL
   const computedLayers = useMemo(() => {
     return layers.map(layer => {
@@ -249,7 +322,8 @@ function App() {
       // Renderizar trazo con soporte mixto de líneas rectas y curvas suaves + cierre de loop
       const renderPoints = renderMixedPoints(layer.points, 16, layer.isClosed);
 
-      const resampled = resamplePath(renderPoints, 2 * pathScale);
+      // Muestreo con densidad ajustable (permite miles de armónicos exactos)
+      const resampled = resamplePath(renderPoints, Math.max(0.4, samplingDensity * pathScale));
       const layerOrigin = layer.manualOrigin 
         ? layer.origin 
         : getBarycenter(renderPoints);
@@ -283,7 +357,7 @@ function App() {
         path: layerPaths[layer.id] || []
       };
     });
-  }, [layers, pathScale, layerPaths]);
+  }, [layers, pathScale, samplingDensity, layerPaths]);
 
   // Bucle de Animación Simultánea Multicapa
   useEffect(() => {
@@ -332,17 +406,6 @@ function App() {
     setIsAnimating(!isAnimating);
   };
 
-  const handleClear = () => {
-    setLayersHistory([[createDefaultLayer('layer-1', 'Trazo 1', '#38bdf8')]]);
-    setHistoryIndex(0);
-    setActiveLayerId('layer-1');
-    setLayerPaths({});
-    setTime(0);
-    setIsAnimating(false);
-    setShowEpicyclesPreview(false);
-    setBgImage(null);
-  };
-
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       setHistoryIndex(prev => prev - 1);
@@ -375,16 +438,19 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
-  // Renderizado Offline de Video a 60 FPS con todas las capas
+  // Renderizado Offline de Video a 60 FPS con las capas seleccionadas por check
   const handleStartRenderVideo = async () => {
     if (isRenderingVideo) {
       setIsRenderingVideo(false);
       return;
     }
 
-    const hasFourier = computedLayers.some(l => l.effectiveFourier?.length > 0);
-    if (!hasFourier) {
-      alert("Dibuja al menos una figura para generar los epiciclos.");
+    const layersToRender = computedLayers.filter(l => 
+      recordedLayerIds.includes(l.id) && l.effectiveFourier?.length > 0
+    );
+
+    if (layersToRender.length === 0) {
+      alert("Selecciona al menos una traza con dibujo para renderizar el video.");
       return;
     }
 
@@ -393,7 +459,7 @@ function App() {
 
     try {
       const { blob, url, extension } = await renderFourierVideoOffline({
-        layers: computedLayers,
+        layers: layersToRender,
         exportQuality,
         recordingBox: showRecordingBox ? recordingBox : null,
         onProgress: (p) => setRenderProgress(p)
@@ -523,7 +589,8 @@ function App() {
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < layersHistory.length - 1}
-        onClear={handleClear}
+        onClearAll={handleClearAll}
+        onClearActiveLayer={handleClearActiveLayer}
         onZoomIn={() => canvasStageRef.current?.zoomIn()}
         onZoomOut={() => canvasStageRef.current?.zoomOut()}
         onResetView={() => canvasStageRef.current?.resetView()}
@@ -536,6 +603,7 @@ function App() {
         showEpicyclesPreview={showEpicyclesPreview}
         onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
         onToggleClosePath={handleToggleClosePath}
+        onDetachPoints={handleDetachPoints}
         onClearPaths={handleClearPaths}
         topOffset={isNative() && !effectivePremium ? 64 : 8}
       />
@@ -575,6 +643,7 @@ function App() {
             {activeTab === 'draw' && mode === 'draw-pencil' && `Lápiz — Dibujando en ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'draw-line' && `Línea Recta — Clic para añadir puntos en ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'draw-curve' && `Curva Spline — Clic para añadir puntos curvos en ${activeLayer.name}`}
+            {activeTab === 'draw' && mode === 'insert-point' && `Añadir Punto — Toca en la línea/curva para insertar un punto en ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'edit' && `Edición — Arrastra los puntos de ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'moveOrigin' && `Centro — Arrastra el punto de origen de ${activeLayer.name}`}
             {activeTab === 'draw' && mode === 'pan' && 'Arrastra para mover • Scroll/Pinch para zoom'}
@@ -635,13 +704,16 @@ function App() {
         mode={mode}
         setMode={setMode}
         onImageUpload={setBgImage}
-        onClear={handleClear}
+        onClearAll={handleClearAll}
+        onClearActiveLayer={handleClearActiveLayer}
         onToggleAnimation={handleToggleAnimation}
         isAnimating={isAnimating}
         animationSpeed={animationSpeed}
         setAnimationSpeed={setAnimationSpeed}
         pathScale={pathScale}
         setPathScale={setPathScale}
+        samplingDensity={samplingDensity}
+        setSamplingDensity={setSamplingDensity}
         snapRadius={snapRadius}
         setSnapRadius={setSnapRadius}
         pointSize={pointSize}
@@ -669,7 +741,12 @@ function App() {
         showEpicyclesPreview={showEpicyclesPreview}
         onToggleEpicyclesPreview={() => setShowEpicyclesPreview(prev => !prev)}
         onToggleClosePath={handleToggleClosePath}
+        onDetachPoints={handleDetachPoints}
         onClearPaths={handleClearPaths}
+        recordedLayerIds={recordedLayerIds}
+        onToggleRecordLayer={handleToggleRecordLayer}
+        onSelectAllRecordLayers={handleSelectAllRecordLayers}
+        onDeselectAllRecordLayers={handleDeselectAllRecordLayers}
       />
       
       {showAuth && (
