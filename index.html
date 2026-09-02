@@ -5,40 +5,77 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- SEO Meta Tags -->
-    <title>Epiciclos StiveSci - Dibuja y Anima con Series de Fourier</title>
-    <meta name="description" content="Epiciclos StiveSci: Crea increíbles animaciones matemáticas dibujando cualquier forma. Aplicación interactiva con Series de Fourier y epiciclos por StiveSci. ¡Gratis y online!" />
-    <meta name="keywords" content="epiciclos stivesci, stivesci epiciclos, stivesci, epiciclos, fourier, series de fourier, matemáticas, dibujo, animación matemática, dibujar con matemáticas" />
+    <!-- SEO Title & Meta Tags -->
+    <title>Animar con Epiciclos - Simulador y Dibujo con Series de Fourier Online</title>
+    <meta name="description" content="Animar con Epiciclos: Dibuja cualquier forma, curva o trazo y observa cómo las Series de Fourier lo recrean con círculos y rotores matemáticos en tiempo real. ¡Simulador gratis y exportador de videos a 60 FPS!" />
+    <meta name="keywords" content="animar con epiciclos, epiciclos animacion, fourier animation, dibujar con fourier, epiciclos fourier, series de fourier animacion, fourier epicycles, fourier drawing, simulador de fourier, animacion matematica, epiciclos online, stivesci" />
     <meta name="author" content="StiveSci" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     
-    <!-- Open Graph / Social Media -->
-    <meta property="og:title" content="Epiciclos StiveSci - Dibuja con Fourier" />
-    <meta property="og:description" content="Dibuja cualquier forma y observa cómo las matemáticas (Series de Fourier) la recrean usando epiciclos conectados. ¡Exporta tus videos en 60 FPS por StiveSci!" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Epiciclos StiveSci" />
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://stivesci.com/" />
 
-    <!-- Schema.org JSON-LD for Google Search -->
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Animar con Epiciclos - Simulador de Series de Fourier" />
+    <meta property="og:description" content="Dibuja cualquier forma y anímala con Series de Fourier y epiciclos rotatorios. Exporta tus animaciones en videos fluidos a 60 FPS gratis." />
+    <meta property="og:site_name" content="Epiciclos - Fourier Animation Tool" />
+    <meta property="og:image" content="/vite.svg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Animar con Epiciclos - Simulador de Fourier Online" />
+    <meta name="twitter:description" content="Crea animaciones con epiciclos dibujando cualquier trazo en pantalla con la Transformada de Fourier." />
+    <meta name="twitter:image" content="/vite.svg" />
+
+    <!-- Schema.org JSON-LD (Search Engines Rich Snippet) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "Epiciclos StiveSci",
-      "alternateName": ["Epiciclos", "StiveSci Epiciclos", "Fourier Epiciclos"],
-      "description": "Crea increíbles animaciones matemáticas dibujando cualquier forma usando Series de Fourier y epiciclos por StiveSci.",
-      "author": {
+      "name": "Animar con Epiciclos",
+      "alternateName": [
+        "Epiciclos",
+        "Epiciclos Animación",
+        "Fourier Epicycles Simulator",
+        "Epiciclos StiveSci"
+      ],
+      "url": "https://stivesci.com",
+      "description": "Simulador interactivo para dibujar y animar con Series de Fourier y epiciclos. Permite crear multicapas, trazos combinados, partición proporcional y exportación de video 60 FPS.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "All",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "creator": {
         "@type": "Person",
         "name": "StiveSci"
-      },
-      "applicationCategory": "EducationalApplication",
-      "operatingSystem": "All"
+      }
     }
     </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Semantic SEO content for search engine indexers before React mounts -->
+    <div id="root">
+      <main style="font-family: 'Inter', sans-serif; padding: 20px; color: #f8fafc; background: #0a0d14; min-height: 100vh;">
+        <h1 style="color: #38bdf8; font-size: 1.8rem; margin-bottom: 10px;">Animar con Epiciclos - Simulador de Series de Fourier</h1>
+        <p style="color: #cbd5e1; font-size: 1rem; line-height: 1.5; max-width: 700px;">
+          Bienvenido al simulador interactivo de <strong>animación con epiciclos</strong> y <strong>Series de Fourier</strong>. Dibuja cualquier figura libre, línea o curva suave y nuestro motor matemático calculará la <em>Transformada Discreta de Fourier (DFT)</em> para recrear tu dibujo mediante una cadena de círculos y rotores rotatorios engranados.
+        </p>
+        <section style="margin-top: 16px;">
+          <h2 style="color: #f1f5f9; font-size: 1.2rem;">Características Principales:</h2>
+          <ul style="color: #94a3b8; line-height: 1.6;">
+            <li><strong>Dibujo Multicapa:</strong> Lápiz libre, rectas y curvas splines interconectadas.</li>
+            <li><strong>Epiciclos y Armónicos:</strong> Control de cantidad de rotores, ordenamiento por amplitud y partición proporcional.</li>
+            <li><strong>Exportación a 60 FPS:</strong> Genera videos en alta definición sin lag en segundo plano.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
