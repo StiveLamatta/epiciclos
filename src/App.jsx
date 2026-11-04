@@ -157,8 +157,8 @@ function App() {
 
   // Layout sizing
   const [windowSize, setWindowSize] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: Math.max(1, window.innerWidth || 1),
+    height: Math.max(1, window.innerHeight || 1),
   });
 
   // Cuadro de Grabación Delimitado
@@ -177,8 +177,8 @@ function App() {
   useEffect(() => {
     const handleResize = () => {
       setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: Math.max(1, window.innerWidth || 1),
+        height: Math.max(1, window.innerHeight || 1),
       });
     };
     window.addEventListener('resize', handleResize);

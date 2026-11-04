@@ -1,10 +1,14 @@
 import React from 'react';
-import { 
-  PenTool, Minus, Spline, MousePointer2, Move, Crosshair, 
-  Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw, 
-  Play, Square, Video, Trash2, Plus, Eye, EyeOff, CircleDot,
-  Eraser, Scissors, PlusSquare
+import {
+  PenTool, Minus, Spline, MousePointer2, Move, Crosshair,
+  Undo2, Redo2, Crop, ZoomIn, ZoomOut, RotateCcw,
+  Play, Square, Plus, Eye, EyeOff, CircleDot, Scissors, PlusSquare
 } from 'lucide-react';
+
+const selectDrawMode = (setActiveTab, setMode, nextMode) => {
+  setActiveTab('draw');
+  setMode(nextMode);
+};
 
 export default function TopQuickbar({
   mode,
@@ -15,13 +19,10 @@ export default function TopQuickbar({
   activeLayerId,
   setActiveLayerId,
   onAddLayer,
-  onUpdateLayer,
   onUndo,
   onRedo,
   canUndo,
   canRedo,
-  onClearAll,
-  onClearActiveLayer,
   onZoomIn,
   onZoomOut,
   onResetView,
@@ -29,265 +30,189 @@ export default function TopQuickbar({
   onToggleAnimation,
   showRecordingBox,
   setShowRecordingBox,
-  isRenderingVideo,
-  onStartRenderVideo,
   showEpicyclesPreview,
   onToggleEpicyclesPreview,
   onToggleClosePath,
   onDetachPoints,
-  onClearPaths,
   topOffset = 8
 }) {
   const activeLayer = layers.find(l => l.id === activeLayerId) || layers[0] || {};
+  const pointCount = activeLayer.points?.length || 0;
+  const layerName = activeLayer.name || 'Trazo 1';
+
+  const drawActive = (toolMode) => activeTab === 'draw' && mode === toolMode;
 
   return (
-    <div className="top-quickbar-container" style={{ '--quickbar-top': `${topOffset}px` }}>
-      <div className="top-quickbar glass-panel">
-        {/* Selector Rápido de Capa / Traza */}
-        {layers.length > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+    <>
+      <header className="studio-topbar" style={{ '--studio-top': `${topOffset}px` }}>
+        <div className="studio-brand">Epiciclos</div>
+
+        <div className="studio-chip">
+          {layers.length > 1 ? (
             <select
+              className="studio-chip-select"
               value={activeLayer.id}
+              aria-label="Traza activa"
               onChange={(e) => setActiveLayerId(e.target.value)}
-              className="quick-btn"
-              style={{
-                background: 'rgba(56, 189, 248, 0.2)',
-                border: '1px solid #38bdf8',
-                color: '#38bdf8',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                outline: 'none',
-                padding: '4px 8px'
-              }}
             >
-              {layers.map((l, i) => (
-                <option key={l.id} value={l.id} style={{ background: '#0f172a', color: '#fff' }}>
-                  {l.name || `Trazo ${i + 1}`} ({l.points?.length || 0}p)
+              {layers.map((layer, index) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name || `Trazo ${index + 1}`}
                 </option>
               ))}
             </select>
+          ) : (
+            <span className="studio-chip-name">{layerName}</span>
+          )}
+          <span className="studio-chip-count">{pointCount} puntos</span>
+          <button
+            type="button"
+            className="studio-chip-add"
+            onClick={onAddLayer}
+            title="Añadir nueva traza"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        <div className="studio-top-actions">
+          <div className="studio-zoom-mobile">
+            <button type="button" className="studio-icon-btn" onClick={onZoomIn} title="Acercar zoom">
+              <ZoomIn size={16} />
+            </button>
+            <button type="button" className="studio-icon-btn" onClick={onZoomOut} title="Alejar zoom">
+              <ZoomOut size={16} />
+            </button>
+            <button type="button" className="studio-icon-btn" onClick={onResetView} title="Centrar vista">
+              <RotateCcw size={16} />
+            </button>
           </div>
-        )}
+          <button
+            type="button"
+            className={`studio-play ${isAnimating ? 'is-paused' : ''}`}
+            onClick={onToggleAnimation}
+            title="Iniciar / Pausar animación"
+          >
+            {isAnimating ? <Square size={15} /> : <Play size={15} />}
+            <span>{isAnimating ? 'Pausa' : 'Play'}</span>
+          </button>
+        </div>
+      </header>
 
+      <aside className="studio-rail" aria-label="Herramientas">
         <button
-          className="quick-btn"
-          onClick={onAddLayer}
-          title="Añadir Nueva Traza / Capa"
-          style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}
+          type="button"
+          className={`studio-rail-btn ${drawActive('draw-pencil') ? 'active' : ''}`}
+          onClick={() => selectDrawMode(setActiveTab, setMode, 'draw-pencil')}
+          title="Lápiz libre"
         >
-          <Plus size={15} />
-          <span>Traza</span>
+          <PenTool size={18} />
+        </button>
+        <button
+          type="button"
+          className={`studio-rail-btn ${drawActive('draw-line') ? 'active' : ''}`}
+          onClick={() => selectDrawMode(setActiveTab, setMode, 'draw-line')}
+          title="Línea recta"
+        >
+          <Minus size={18} />
+        </button>
+        <button
+          type="button"
+          className={`studio-rail-btn ${drawActive('draw-curve') ? 'active' : ''}`}
+          onClick={() => selectDrawMode(setActiveTab, setMode, 'draw-curve')}
+          title="Curva suave"
+        >
+          <Spline size={18} />
+        </button>
+        <button
+          type="button"
+          className={`studio-rail-btn ${drawActive('insert-point') ? 'active' : ''}`}
+          onClick={() => selectDrawMode(setActiveTab, setMode, 'insert-point')}
+          title="Insertar punto"
+        >
+          <PlusSquare size={18} />
         </button>
 
-        <div className="quickbar-divider" />
+        <div className="studio-rail-divider" />
 
-        {/* Herramientas de dibujo para la traza activa */}
         <button
-          className={`quick-btn ${mode === 'draw-pencil' && activeTab === 'draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('draw');
-            setMode('draw-pencil');
-          }}
-          title="Lápiz Libre"
+          type="button"
+          className={`studio-rail-btn ${drawActive('edit') ? 'active' : ''}`}
+          onClick={() => selectDrawMode(setActiveTab, setMode, 'edit')}
+          title="Editar puntos"
         >
-          <PenTool size={16} />
-          <span>Lápiz</span>
+          <MousePointer2 size={18} />
         </button>
-
         <button
-          className={`quick-btn ${mode === 'draw-line' && activeTab === 'draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('draw');
-            setMode('draw-line');
-          }}
-          title="Líneas Rectas"
-        >
-          <Minus size={16} />
-          <span>Línea</span>
-        </button>
-
-        <button
-          className={`quick-btn ${mode === 'draw-curve' && activeTab === 'draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('draw');
-            setMode('draw-curve');
-          }}
-          title="Curvas Suaves (Spline)"
-        >
-          <Spline size={16} />
-          <span>Curva</span>
-        </button>
-
-        {/* Insertar Puntos */}
-        <button
-          className={`quick-btn ${mode === 'insert-point' && activeTab === 'draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('draw');
-            setMode('insert-point');
-          }}
-          title="Insertar Puntos Dentro de la Curva/Línea"
-        >
-          <PlusSquare size={16} />
-          <span>+ Punto</span>
-        </button>
-
-        {/* Unir Inicio y Fin (Cerrar Trazo) */}
-        <button
-          className={`quick-btn ${activeLayer.isClosed ? 'active' : ''}`}
-          onClick={() => onToggleClosePath && onToggleClosePath(activeLayer.id)}
-          title="Unir Punto Inicial con Final (Cerrar Trazo)"
-        >
-          <CircleDot size={16} />
-          <span>{activeLayer.isClosed ? 'Cerrado' : 'Unir'}</span>
-        </button>
-
-        {/* Desunir Puntos Coincidentes */}
-        <button
-          className="quick-btn"
-          onClick={() => onDetachPoints && onDetachPoints(activeLayer.id)}
-          title="Desunir / Separar Puntos Coincidentes"
-        >
-          <Scissors size={15} />
-          <span>Desunir</span>
-        </button>
-
-        <button
-          className={`quick-btn ${mode === 'edit' && activeTab === 'draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('draw');
-            setMode('edit');
-          }}
-          title="Editar Puntos"
-        >
-          <MousePointer2 size={16} />
-          <span>Editar</span>
-        </button>
-
-        <button
-          className={`quick-btn ${mode === 'pan' ? 'active' : ''}`}
+          type="button"
+          className={`studio-rail-btn ${mode === 'pan' ? 'active' : ''}`}
           onClick={() => setMode('pan')}
-          title="Mover Lienzo"
+          title="Mover lienzo"
         >
-          <Move size={16} />
-          <span>Mover</span>
+          <Move size={18} />
         </button>
-
         <button
-          className={`quick-btn ${mode === 'moveOrigin' ? 'active' : ''}`}
+          type="button"
+          className={`studio-rail-btn ${mode === 'moveOrigin' ? 'active' : ''}`}
           onClick={() => setMode('moveOrigin')}
-          title="Mover Centro / Origen"
+          title="Mover centro"
         >
-          <Crosshair size={16} />
-          <span>Centro</span>
+          <Crosshair size={18} />
+        </button>
+        <button
+          type="button"
+          className={`studio-rail-btn ${activeLayer.isClosed ? 'active' : ''}`}
+          onClick={() => onToggleClosePath && onToggleClosePath(activeLayer.id)}
+          title="Unir inicio y final"
+        >
+          <CircleDot size={18} />
+        </button>
+        <button
+          type="button"
+          className="studio-rail-btn"
+          onClick={() => onDetachPoints && onDetachPoints(activeLayer.id)}
+          title="Desunir puntos coincidentes"
+        >
+          <Scissors size={18} />
         </button>
 
-        <div className="quickbar-divider" />
+        <div className="studio-rail-divider" />
 
-        {/* Vista previa de Epiciclos */}
+        <button type="button" className="studio-rail-btn" onClick={onUndo} disabled={!canUndo} title="Deshacer">
+          <Undo2 size={18} />
+        </button>
+        <button type="button" className="studio-rail-btn" onClick={onRedo} disabled={!canRedo} title="Rehacer">
+          <Redo2 size={18} />
+        </button>
+        <button type="button" className="studio-rail-btn" onClick={onZoomIn} title="Acercar zoom">
+          <ZoomIn size={18} />
+        </button>
+        <button type="button" className="studio-rail-btn" onClick={onZoomOut} title="Alejar zoom">
+          <ZoomOut size={18} />
+        </button>
+        <button type="button" className="studio-rail-btn" onClick={onResetView} title="Centrar vista">
+          <RotateCcw size={18} />
+        </button>
+
+        <div className="studio-rail-divider" />
+
         <button
-          className={`quick-btn ${showEpicyclesPreview ? 'active' : ''}`}
+          type="button"
+          className={`studio-rail-btn ${showEpicyclesPreview ? 'active' : ''}`}
           onClick={onToggleEpicyclesPreview}
-          title="Mostrar / Ocultar Vista Previa de Epiciclos"
+          title="Vista previa de epiciclos"
         >
-          {showEpicyclesPreview ? <Eye size={16} /> : <EyeOff size={16} />}
-          <span>{showEpicyclesPreview ? 'Ver Epiciclos' : 'Epiciclos'}</span>
+          {showEpicyclesPreview ? <Eye size={18} /> : <EyeOff size={18} />}
         </button>
-
-        {/* Deshacer / Rehacer */}
         <button
-          className="quick-btn"
-          onClick={onUndo}
-          disabled={!canUndo}
-          title="Deshacer"
-        >
-          <Undo2 size={16} />
-        </button>
-
-        <button
-          className="quick-btn"
-          onClick={onRedo}
-          disabled={!canRedo}
-          title="Rehacer"
-        >
-          <Redo2 size={16} />
-        </button>
-
-        <div className="quickbar-divider" />
-
-        {/* Marco de Grabación Delimitado */}
-        <button
-          className={`quick-btn ${showRecordingBox ? 'active' : ''}`}
+          type="button"
+          className={`studio-rail-btn ${showRecordingBox ? 'active' : ''}`}
           onClick={() => setShowRecordingBox(prev => !prev)}
-          title="Ajustar Marco de Grabación"
+          title="Marco de grabación"
         >
-          <Crop size={16} />
-          <span>Marco</span>
+          <Crop size={18} />
         </button>
-
-        {/* Zoom */}
-        <button className="quick-btn" onClick={onZoomIn} title="Acercar Zoom">
-          <ZoomIn size={16} />
-        </button>
-
-        <button className="quick-btn" onClick={onZoomOut} title="Alejar Zoom">
-          <ZoomOut size={16} />
-        </button>
-
-        <button className="quick-btn" onClick={onResetView} title="Centrar Vista">
-          <RotateCcw size={16} />
-        </button>
-
-        <div className="quickbar-divider" />
-
-        {/* Animación, Limpiar Estela y Video */}
-        <button
-          className={`quick-btn ${isAnimating ? 'danger' : 'primary'}`}
-          onClick={onToggleAnimation}
-          title="Iniciar / Pausar Animación"
-        >
-          {isAnimating ? <Square size={16} /> : <Play size={16} />}
-          <span>{isAnimating ? 'Pausa' : 'Play'}</span>
-        </button>
-
-        <button
-          className="quick-btn"
-          onClick={onClearPaths}
-          title="Borrar Estela / Camino Trazado sin borrar los puntos"
-        >
-          <Eraser size={16} />
-          <span>Estela</span>
-        </button>
-
-        <button
-          className={`quick-btn ${isRenderingVideo ? 'danger' : 'accent'}`}
-          onClick={onStartRenderVideo}
-          title="Renderizar Video 60 FPS en segundo plano"
-        >
-          <Video size={16} />
-          <span>{isRenderingVideo ? 'Cancel' : 'Video 60fps'}</span>
-        </button>
-
-        {/* Borrar Traza Actual */}
-        <button 
-          className="quick-btn danger" 
-          onClick={onClearActiveLayer} 
-          title={`Borrar solo los puntos de ${activeLayer.name || 'la traza actual'}`}
-        >
-          <Trash2 size={15} />
-          <span>Traza</span>
-        </button>
-
-        {/* Borrar Todo */}
-        <button 
-          className="quick-btn danger" 
-          style={{ background: '#991b1b' }}
-          onClick={onClearAll} 
-          title="Borrar Todo el Proyecto"
-        >
-          <Trash2 size={15} />
-          <span>Todo</span>
-        </button>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }

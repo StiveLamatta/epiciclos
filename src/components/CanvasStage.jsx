@@ -341,11 +341,13 @@ const CanvasStage = forwardRef(function CanvasStage({
 
   const isPanEnabled = mode === 'pan' || activeTab !== 'draw';
   const shouldRenderEpicycles = isAnimating || showEpicyclesPreview || mode === 'moveOrigin' || isRecording;
+  const stageWidth = Math.max(1, Number(width) || 1);
+  const stageHeight = Math.max(1, Number(height) || 1);
 
   return (
     <Stage
-      width={width}
-      height={height}
+      width={stageWidth}
+      height={stageHeight}
       scaleX={stageScale}
       scaleY={stageScale}
       x={stageX}
